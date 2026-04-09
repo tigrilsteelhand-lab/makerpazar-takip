@@ -6,6 +6,52 @@
 <title>Nakit Akışı Takvimi</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAnuQ5ECt92tpyD_Qo84xv4tPSDUyjU0R8",
+  authDomain: "nakit-takip.firebaseapp.com",
+  projectId: "nakit-takip",
+  storageBucket: "nakit-takip.firebasestorage.app",
+  messagingSenderId: "849727365719",
+  appId: "1:849727365719:web:8c5908a38a9462fb253912"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const DOC_REF = doc(db, 'nakit', 'data');
+
+// Expose to global scope for main script
+window._fbSave = async (data) => {
+  try {
+    await setDoc(DOC_REF, { payload: JSON.stringify(data) });
+  } catch(e) { console.error('Firebase save error:', e); }
+};
+
+window._fbInit = async (onData) => {
+  // First load
+  try {
+    const snap = await getDoc(DOC_REF);
+    if (snap.exists()) {
+      const d = JSON.parse(snap.data().payload);
+      onData(d, false);
+    }
+  } catch(e) { console.error('Firebase load error:', e); }
+
+  // Real-time listener
+  onSnapshot(DOC_REF, (snap) => {
+    if (snap.exists()) {
+      const d = JSON.parse(snap.data().payload);
+      onData(d, true);
+    }
+  });
+};
+
+window._fbReady = true;
+document.dispatchEvent(new Event('fbReady'));
+</script>
 <style>
 :root {
   --bg:#f5f4f0; --surface:#ffffff; --surface2:#f0efe9;
@@ -367,6 +413,10 @@ tr.frozen-row .freeze-btn{opacity:1;}
     <span class="year-label" id="yearLabel">2026</span>
     <button id="nextYear">&#8250;</button>
   </div>
+  <div id="syncIndicator" style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px;">
+    <span id="syncDot" style="width:7px;height:7px;border-radius:50%;background:var(--text-3);display:inline-block;"></span>
+    <span id="syncText">Bağlanıyor...</span>
+  </div>
   <button class="cari-btn" id="cariToggleBtn">📋 Cariler</button>
 </div>
 
@@ -599,19 +649,60 @@ let activeChart = 'flow';
 let viewMode = 'all'; // 'all' | 'week'
 let data = loadData();
 
+function setSyncStatus(status) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  if (status === 'ok') { dot.style.background = 'var(--green)'; txt.textContent = 'Senkronize'; }
+  else if (status === 'saving') { dot.style.background = '#f59e0b'; txt.textContent = 'Kaydediliyor...'; }
+  else if (status === 'error') { dot.style.background = 'var(--red)'; txt.textContent = 'Bağlantı hatası'; }
+  else { dot.style.background = 'var(--text-3)'; txt.textContent = 'Bağlanıyor...'; }
+}
+
+let _remoteUpdate = false; // flag to avoid re-saving when we receive remote data
+
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const d = JSON.parse(raw);
       if (!d.budgets) d.budgets = {};
+      if (!d.caris) d.caris = [];
       return d;
     }
   } catch(e) {}
-  return { startBalances: {}, entries: {}, budgets: {} };
+  return { startBalances: {}, entries: {}, budgets: {}, caris: [] };
 }
+
 function saveData() {
+  // Always save locally as backup
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+  // Save to Firebase if available and this isn't a remote update
+  if (!_remoteUpdate && window._fbSave) {
+    setSyncStatus('saving');
+    window._fbSave(data).then(() => setSyncStatus('ok')).catch(() => setSyncStatus('error'));
+  }
+}
+
+// Initialize Firebase sync after unlock
+function initFirebaseSync() {
+  if (!window._fbInit) {
+    document.addEventListener('fbReady', () => initFirebaseSync());
+    return;
+  }
+  window._fbInit((remoteData, isRealtime) => {
+    _remoteUpdate = true;
+    data = remoteData;
+    if (!data.budgets) data.budgets = {};
+    if (!data.caris) data.caris = [];
+    // Sync local backup
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+    const savedStart = data.startBalances[year];
+    if (savedStart !== undefined) document.getElementById('startBalance').value = savedStart;
+    render();
+    setSyncStatus('ok');
+    _remoteUpdate = false;
+    if (isRealtime && !_remoteUpdate) showToast('☁️ Veri güncellendi');
+  });
 }
 
 function fmt(n, full) {
@@ -1457,6 +1548,9 @@ mainCanvas.addEventListener('mouseleave', hideTooltip);
 // Init
 const savedStart = data.startBalances[year];
 if(savedStart !== undefined) document.getElementById('startBalance').value = savedStart;
+
+// Start Firebase sync
+initFirebaseSync();
 
 // --- Cari ---
 let editingCariId = null;
