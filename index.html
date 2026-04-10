@@ -320,6 +320,39 @@ tr.frozen-row .freeze-btn{opacity:1;}
 .row-ok{color:var(--green);}
 .row-err{color:var(--red);}
 
+/* Payment status */
+.pay-status-btn {
+  border: none; border-radius: 20px; padding: 3px 10px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; transition: all .15s;
+  white-space: nowrap;
+}
+.pay-status-btn.pending {
+  background: var(--orange-bg); color: var(--orange);
+}
+.pay-status-btn.pending:hover { opacity: .8; }
+.pay-status-btn.paid {
+  background: var(--green-bg); color: var(--green);
+}
+.pay-status-btn.paid:hover { opacity: .8; }
+
+/* Drag reorder */
+tr.dragging { opacity: .4; }
+tr.drag-over td { border-top: 2px solid var(--accent); }
+td.drag-handle {
+  cursor: grab; color: var(--text-3); font-size: 14px;
+  padding: 9px 4px; user-select: none;
+}
+td.drag-handle:hover { color: var(--text-2); }
+
+/* Month card status dots */
+.mc-status { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.mc-status-dot {
+  font-size: 10px; padding: 1px 7px; border-radius: 20px; font-weight: 500;
+}
+.mc-status-dot.pending { background: var(--orange-bg); color: var(--orange); }
+.mc-status-dot.paid { background: var(--green-bg); color: var(--green); }
+
 /* Toast */
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--text);color:var(--bg);padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:9999;}
 .toast.show{opacity:1;transform:translateY(0);}
@@ -1080,7 +1113,17 @@ function renderMonths() {
         <div class="bar-row"><span class="bar-lbl">Gid</span><div class="bar-bg"><div class="bar-fill e" style="width:${expPct}%"></div></div><span class="bar-amt">${fmt(s.exp)}</span></div>
       </div>
       ${budgetHtml}
-      <div class="mc-footer">${s.count} hareket${isToday?' · bu ay':''}</div>`;
+      <div class="mc-footer">${s.count} hareket${isToday?' · bu ay':''}</div>
+      ${(() => {
+        const expenses = getEntries(year, m).filter(x => x.type === 'expense');
+        const pending = expenses.filter(x => x.payStatus !== 'paid').length;
+        const paid = expenses.filter(x => x.payStatus === 'paid').length;
+        if (!expenses.length) return '';
+        return `<div class="mc-status">
+          ${paid > 0 ? `<span class="mc-status-dot paid">✓ ${paid} ödendi</span>` : ''}
+          ${pending > 0 ? `<span class="mc-status-dot pending">⏳ ${pending} bekliyor</span>` : ''}
+        </div>`;
+      })()}`;
     card.addEventListener('click', () => {
       selectedMonth = selectedMonth===m ? null : m;
       render();
@@ -1158,12 +1201,18 @@ function renderTable(m) {
     const recHtml = x.recurring ? `<span class="recurring-badge">↻</span>` : '';
     const frozenHtml = isFrozen ? `<span class="frozen-badge">❄ Donduruldu</span>` : '';
     const noteHtml = x.note ? `<div class="entry-note">📎 ${x.note}</div>` : '';
-    return `<tr class="${isFrozen?'frozen-row':''}">
+    const isPaid = x.payStatus === 'paid';
+    const payHtml = x.type === 'expense'
+      ? `<button class="pay-status-btn ${isPaid?'paid':'pending'}" data-id="${x.id}">${isPaid?'✓ Ödendi':'⏳ Ödenecek'}</button>`
+      : '';
+    return `<tr class="${isFrozen?'frozen-row':''}" draggable="true" data-id="${x.id}" data-date="${x.date}">
+      <td class="drag-handle" title="Aynı tarihteki sırayı değiştir">⠿</td>
       <td style="color:var(--text-2);font-family:'DM Mono',monospace;font-size:12px">${d[2]}.${d[1]}.${d[0]}</td>
       <td><div>${x.desc}${catHtml}${recHtml}${frozenHtml}</div>${noteHtml}</td>
       <td><span class="tag ${x.type}">${x.type==='income'?'Gelen':'Giden'}</span></td>
       <td class="amount-cell ${x.type==='income'?'inc':'exp'}">${x.type==='income'?'+':'-'}${fmt(x.amount,true)}</td>
       <td style="text-align:right">${isFrozen?'<span style="color:var(--text-3);font-size:11px;font-family:\'DM Mono\',monospace">—</span>':`<span class="kasa-badge ${bc}">${fmt(runBal,true)}</span>`}</td>
+      <td style="text-align:center">${payHtml}</td>
       <td style="white-space:nowrap">
         <button class="freeze-btn${isFrozen?' frozen':''}" data-id="${x.id}" title="${isFrozen?'Aktif Et':'Dondur'}">❄</button>
         <button class="edit-btn" data-id="${x.id}" title="Düzenle">✎</button>
@@ -1172,7 +1221,60 @@ function renderTable(m) {
     </tr>`;
   }).join('');
 
-  wrap.innerHTML = `<table><thead><tr><th>Tarih</th><th>Açıklama</th><th>Tür</th><th style="text-align:right">Tutar</th><th style="text-align:right">Kasa</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  wrap.innerHTML = `<table><thead><tr><th></th><th>Tarih</th><th>Açıklama</th><th>Tür</th><th style="text-align:right">Tutar</th><th style="text-align:right">Kasa</th><th style="text-align:center">Durum</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  // Payment status toggle
+  wrap.querySelectorAll('.pay-status-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = getKey(year, m);
+      const entry = (data.entries[key]||[]).find(x=>x.id===btn.dataset.id);
+      if (!entry) return;
+      entry.payStatus = entry.payStatus === 'paid' ? 'pending' : 'paid';
+      saveData();
+      showToast(entry.payStatus === 'paid' ? '✓ Ödendi olarak işaretlendi' : '⏳ Ödenecek olarak işaretlendi');
+      render();
+    });
+  });
+
+  // Drag to reorder (same date only)
+  let dragSrcId = null;
+  wrap.querySelectorAll('tr[draggable]').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragSrcId = row.dataset.id;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      wrap.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (row.dataset.id === dragSrcId) return;
+      if (row.dataset.date !== wrap.querySelector(`tr[data-id="${dragSrcId}"]`)?.dataset.date) return;
+      wrap.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      if (!dragSrcId || row.dataset.id === dragSrcId) return;
+      const srcDate = wrap.querySelector(`tr[data-id="${dragSrcId}"]`)?.dataset.date;
+      if (row.dataset.date !== srcDate) {
+        showToast('Sadece aynı tarihteki hareketler yer değiştirebilir');
+        return;
+      }
+      const key = getKey(year, m);
+      const arr = data.entries[key];
+      const srcIdx = arr.findIndex(x=>x.id===dragSrcId);
+      const tgtIdx = arr.findIndex(x=>x.id===row.dataset.id);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      const [moved] = arr.splice(srcIdx, 1);
+      arr.splice(tgtIdx, 0, moved);
+      saveData();
+      render();
+    });
+  });
 
   wrap.querySelectorAll('.freeze-btn').forEach(btn => {
     btn.addEventListener('click', () => {
