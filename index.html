@@ -320,6 +320,19 @@ tr.frozen-row .freeze-btn{opacity:1;}
 .row-ok{color:var(--green);}
 .row-err{color:var(--red);}
 
+/* Date-based row styling */
+tr.row-past td { opacity: .45; }
+tr.row-past:hover td { opacity: .7; }
+tr.row-today { background: linear-gradient(90deg, rgba(37,99,235,0.07) 0%, transparent 80%) !important; }
+tr.row-today td { opacity: 1 !important; }
+tr.row-today .date-cell { color: var(--accent) !important; font-weight: 700 !important; }
+.today-pill {
+  display: inline-block; font-size: 9px; padding: 1px 6px;
+  border-radius: 10px; background: var(--accent); color: #fff;
+  font-weight: 700; margin-left: 5px; vertical-align: middle;
+  letter-spacing: .3px;
+}
+
 /* Payment status */
 .pay-status-btn {
   border: none; border-radius: 20px; padding: 3px 10px;
@@ -1205,9 +1218,18 @@ function renderTable(m) {
     const payHtml = x.type === 'expense'
       ? `<button class="pay-status-btn ${isPaid?'paid':'pending'}" data-id="${x.id}">${isPaid?'✓ Ödendi':'⏳ Ödenecek'}</button>`
       : '';
-    return `<tr class="${isFrozen?'frozen-row':''}" draggable="true" data-id="${x.id}" data-date="${x.date}">
+
+    // Date classification
+    const today = new Date(); today.setHours(0,0,0,0);
+    const rowDate = new Date(x.date); rowDate.setHours(0,0,0,0);
+    const isToday = rowDate.getTime() === today.getTime();
+    const isPast = rowDate < today;
+    const dateRowClass = isFrozen ? 'frozen-row' : isToday ? 'row-today' : isPast ? 'row-past' : '';
+    const todayPill = isToday ? `<span class="today-pill">BUGÜN</span>` : '';
+
+    return `<tr class="${dateRowClass}" draggable="true" data-id="${x.id}" data-date="${x.date}">
       <td class="drag-handle" title="Aynı tarihteki sırayı değiştir">⠿</td>
-      <td style="color:var(--text-2);font-family:'DM Mono',monospace;font-size:12px">${d[2]}.${d[1]}.${d[0]}</td>
+      <td class="date-cell" style="font-family:'DM Mono',monospace;font-size:12px;white-space:nowrap">${d[2]}.${d[1]}.${d[0]}${todayPill}</td>
       <td><div>${x.desc}${catHtml}${recHtml}${frozenHtml}</div>${noteHtml}</td>
       <td><span class="tag ${x.type}">${x.type==='income'?'Gelen':'Giden'}</span></td>
       <td class="amount-cell ${x.type==='income'?'inc':'exp'}">${x.type==='income'?'+':'-'}${fmt(x.amount,true)}</td>
