@@ -431,8 +431,8 @@ td.drag-handle:hover { color: var(--text-2); }
 <div id="lockScreen">
   <div class="lock-box">
     <div class="lock-icon">🔒</div>
-    <div class="lock-title">Nakit Akışı Takvimi</div>
-    <div class="lock-sub">Devam etmek için şifreyi girin</div>
+    <div class="lock-title" id="lockTitle">Nakit Akışı Takvimi</div>
+    <div class="lock-sub" id="lockSub">Devam etmek için şifreyi girin</div>
     <input class="lock-input" type="password" id="lockInput" placeholder="••••••••" maxlength="32" autocomplete="off">
     <button class="lock-btn" id="lockBtn">Giriş</button>
     <div class="lock-err" id="lockErr"></div>
@@ -461,6 +461,11 @@ td.drag-handle:hover { color: var(--text-2); }
   if(sessionStorage.getItem('unlocked')==='1'){
     document.getElementById('lockScreen').style.display='none';
   }
+  // Sync lock screen title from localStorage
+  const savedTitle = localStorage.getItem('appTitle');
+  const savedSub = localStorage.getItem('appSub');
+  if (savedTitle) document.getElementById('lockTitle').textContent = savedTitle;
+  if (savedSub) document.getElementById('lockSub').textContent = savedSub;
   document.getElementById('lockBtn').addEventListener('click', tryUnlock);
   document.getElementById('lockInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
   document.getElementById('lockInput').focus();
@@ -1741,6 +1746,9 @@ function initEditableLabel(id, storageKey, fallback) {
     el.textContent = val || fallback;
     localStorage.setItem(storageKey, el.textContent);
     document.title = document.getElementById('appTitle').textContent;
+    // Sync lock screen
+    const lockEl = document.getElementById(id === 'appTitle' ? 'lockTitle' : 'lockSub');
+    if (lockEl) lockEl.textContent = el.textContent;
   });
   el.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
