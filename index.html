@@ -1247,6 +1247,19 @@ function renderTable(m) {
     const recHtml = x.recurring ? `<span class="recurring-badge">↻</span>` : '';
     const frozenHtml = isFrozen ? `<span class="frozen-badge">❄ Donduruldu</span>` : '';
     const noteHtml = x.note ? `<div class="entry-note">📎 ${x.note}</div>` : '';
+
+    // Cari logo match
+    const matchedCari = getCaris().find(c => c.name.toLowerCase() === (x.desc||'').toLowerCase().trim());
+    const cariLogoHtml = (() => {
+      if (!matchedCari) return '';
+      const logoUrl = getCariLogoUrl(matchedCari);
+      const initials = (matchedCari.name||'?').slice(0,2).toUpperCase();
+      const color = getAvatarColor(matchedCari.name||'');
+      if (logoUrl) {
+        return `<img src="${logoUrl}" style="width:16px;height:16px;border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:5px;border:1px solid var(--border)" onerror="this.outerHTML='<span style=\\'display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;font-size:8px;font-weight:700;color:#fff;background:${color};vertical-align:middle;margin-right:5px\\'>${initials}</span>'">`;
+      }
+      return `<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;font-size:8px;font-weight:700;color:#fff;background:${color};vertical-align:middle;margin-right:5px">${initials}</span>`;
+    })();
     const isPaid = x.payStatus === 'paid';
     const payHtml = x.type === 'expense'
       ? `<button class="pay-status-btn ${isPaid?'paid':'pending'}" data-id="${x.id}">${isPaid?'✓ Ödendi':'⏳ Ödenecek'}</button>`
@@ -1263,7 +1276,7 @@ function renderTable(m) {
     return `<tr class="${dateRowClass}" draggable="true" data-id="${x.id}" data-date="${x.date}">
       <td class="drag-handle" title="Aynı tarihteki sırayı değiştir">⠿</td>
       <td class="date-cell" style="font-family:'DM Mono',monospace;font-size:12px;white-space:nowrap">${d[2]}.${d[1]}.${d[0]}${todayPill}</td>
-      <td><div>${x.desc}${catHtml}${recHtml}${frozenHtml}</div>${noteHtml}</td>
+      <td><div style="display:flex;align-items:center">${cariLogoHtml}<span>${x.desc}${catHtml}${recHtml}${frozenHtml}</span></div>${noteHtml}</td>
       <td><span class="tag ${x.type}">${x.type==='income'?'Gelen':'Giden'}</span></td>
       <td class="amount-cell ${x.type==='income'?'inc':'exp'}">${x.type==='income'?'+':'-'}${fmt(x.amount,true)}</td>
       <td style="text-align:right">${isFrozen?'<span style="color:var(--text-3);font-size:11px;font-family:\'DM Mono\',monospace">—</span>':`<span class="kasa-badge ${bc}">${fmt(runBal,true)}</span>`}</td>
