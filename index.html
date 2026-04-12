@@ -279,6 +279,31 @@ tr:hover td{background:var(--surface2);}
 .btn-save{background:var(--accent);border:none;color:#fff;}
 .btn-save:hover{opacity:.9;}
 
+/* Cari logos */
+.cari-avatar {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; flex-shrink: 0;
+  overflow: hidden; border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.cari-avatar img {
+  width: 100%; height: 100%; object-fit: contain; padding: 3px;
+}
+.cari-avatar.initials {
+  font-size: 13px; font-weight: 700; color: #fff;
+}
+.cari-chip-logo {
+  width: 14px; height: 14px; border-radius: 3px;
+  object-fit: contain; vertical-align: middle; margin-right: 3px;
+}
+.cari-chip-initials {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 3px;
+  font-size: 8px; font-weight: 700; color: #fff;
+  vertical-align: middle; margin-right: 3px;
+}
+
 /* Cari */
 .cari-btn{background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;font-size:12px;color:var(--text-2);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap;}
 .cari-btn:hover{border-color:var(--border-md);color:var(--text);}
@@ -653,6 +678,10 @@ td.drag-handle:hover { color: var(--text-2); }
         <label>Kategori</label>
         <input type="text" id="cariCat" placeholder="Ör: Ödeme Sistemi">
       </div>
+    </div>
+    <div class="fg">
+      <label>Logo URL <span style="color:var(--text-3);font-weight:400">(isteğe bağlı — boş bırakırsan otomatik aranır)</span></label>
+      <input type="text" id="cariLogo" placeholder="https://... veya boş bırak">
     </div>
     <div class="fg">
       <label>Not <span style="color:var(--text-3);font-weight:400">(isteğe bağlı)</span></label>
@@ -1679,6 +1708,57 @@ initFirebaseSync();
 // --- Cari ---
 let editingCariId = null;
 
+const CARI_DOMAIN_MAP = {
+  'paytr': 'paytr.com',
+  'garanti': 'garantibbva.com.tr',
+  'garanti bankası': 'garantibbva.com.tr',
+  'hepsiburada': 'hepsiburada.com',
+  'trendyol': 'trendyol.com',
+  'n11': 'n11.com',
+  'amazon': 'amazon.com.tr',
+  'iyzico': 'iyzico.com',
+  'papara': 'papara.com',
+  'akbank': 'akbank.com',
+  'isbank': 'isbank.com.tr',
+  'iş bankası': 'isbank.com.tr',
+  'yapı kredi': 'yapikredi.com.tr',
+  'ziraat': 'ziraatbank.com.tr',
+  'vakıfbank': 'vakifbank.com.tr',
+  'denizbank': 'denizbank.com',
+  'fibromast': 'fibromast.com',
+  'robolink': 'robolink.com',
+  'genix': 'genix.com.tr',
+};
+
+const AVATAR_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
+
+function getAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function getCariLogoUrl(cari) {
+  if (cari.logo) return cari.logo;
+  const key = (cari.name || '').toLowerCase().trim();
+  if (CARI_DOMAIN_MAP[key]) return `https://logo.clearbit.com/${CARI_DOMAIN_MAP[key]}`;
+  const slug = key.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+  if (slug.length > 3) return `https://logo.clearbit.com/${slug}.com`;
+  return null;
+}
+
+function cariAvatarHtml(cari, size) {
+  size = size || 36;
+  const logoUrl = getCariLogoUrl(cari);
+  const initials = (cari.name || '?').slice(0, 2).toUpperCase();
+  const color = getAvatarColor(cari.name || '');
+  const fs = Math.round(size * 0.35);
+  if (logoUrl) {
+    return `<div class="cari-avatar" style="width:${size}px;height:${size}px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><img src="${logoUrl}" style="width:100%;height:100%;object-fit:contain;padding:3px" onerror="this.parentElement.innerHTML='<span style=\'font-size:${fs}px;font-weight:700;color:#fff\'>${initials}</span>';this.parentElement.style.background='${color}'"></div>`;
+  }
+  return `<div class="cari-avatar initials" style="width:${size}px;height:${size}px;background:${color};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:${fs}px;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>`;
+}
+
 function getCaris() { return data.caris || []; }
 
 function renderCariPanel() {
@@ -1690,6 +1770,7 @@ function renderCariPanel() {
   }
   grid.innerHTML = '<div class="cari-grid">' + caris.map(c => `
     <div class="cari-card">
+      ${cariAvatarHtml(c, 36)}
       <div class="cari-info">
         <div class="cari-name">${c.name}</div>
         <div class="cari-meta">${c.type==='income'?'📥 Gelen':'📤 Giden'}${c.cat?' · '+c.cat:''}${c.note?' · '+c.note:''}</div>
@@ -1718,9 +1799,17 @@ function renderCariQuickPicks() {
   const caris = getCaris();
   const wrap = document.getElementById('cariQuick');
   if (!caris.length) { wrap.innerHTML = ''; return; }
-  wrap.innerHTML = caris.map(c =>
-    `<button class="cari-chip" data-id="${c.id}">${c.name}</button>`
-  ).join('');
+
+  wrap.innerHTML = caris.map(c => {
+    const logoUrl = getCariLogoUrl(c);
+    const initials = (c.name || '?').slice(0,2).toUpperCase();
+    const color = getAvatarColor(c.name || '');
+    const iconHtml = logoUrl
+      ? `<img style="width:14px;height:14px;border-radius:3px;object-fit:contain;vertical-align:middle;margin-right:3px" src="${logoUrl}" onerror="this.outerHTML='<span style=\'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:3px;font-size:8px;font-weight:700;color:#fff;background:${color};vertical-align:middle;margin-right:3px\'>${initials}</span>'">`
+      : `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:3px;font-size:8px;font-weight:700;color:#fff;background:${color};vertical-align:middle;margin-right:3px">${initials}</span>`;
+    return `<button class="cari-chip" data-id="${c.id}">${iconHtml}${c.name}</button>`;
+  }).join('');
+
   wrap.querySelectorAll('.cari-chip').forEach(btn => {
     btn.addEventListener('click', () => {
       const c = getCaris().find(x => x.id === btn.dataset.id);
@@ -1740,6 +1829,7 @@ function openCariModal(cari) {
   document.getElementById('cariName').value = cari ? cari.name : '';
   document.getElementById('cariType').value = cari ? cari.type : 'income';
   document.getElementById('cariCat').value = cari ? (cari.cat||'') : '';
+  document.getElementById('cariLogo').value = cari ? (cari.logo||'') : '';
   document.getElementById('cariNote').value = cari ? (cari.note||'') : '';
   document.getElementById('cariOverlay').classList.add('open');
   setTimeout(() => document.getElementById('cariName').focus(), 100);
@@ -1755,15 +1845,16 @@ function saveCari() {
   if (!name) { document.getElementById('cariName').focus(); return; }
   const cat = document.getElementById('cariCat').value.trim();
   const type = document.getElementById('cariType').value;
+  const logo = document.getElementById('cariLogo').value.trim();
   const note = document.getElementById('cariNote').value.trim();
 
   if (!data.caris) data.caris = [];
   if (editingCariId) {
     const idx = data.caris.findIndex(x => x.id === editingCariId);
-    if (idx !== -1) data.caris[idx] = {...data.caris[idx], name, type, cat, note};
+    if (idx !== -1) data.caris[idx] = {...data.caris[idx], name, type, cat, logo, note};
     showToast('Cari güncellendi');
   } else {
-    data.caris.push({ id: Date.now()+'-'+Math.random().toString(36).slice(2), name, type, cat, note });
+    data.caris.push({ id: Date.now()+'-'+Math.random().toString(36).slice(2), name, type, cat, logo, note });
     showToast('Cari kaydedildi');
   }
   saveData(); closeCariModal(); renderCariPanel();
