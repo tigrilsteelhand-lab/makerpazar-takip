@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pazaryeri & Website Kâr Karşılaştırma</title>
+<style>
+  :root{
+    --navy:#1f3864; --green:#2e7d32; --orange:#b45f06; --yellow:#fff2cc;
+    --grey:#f2f2f2; --border:#d9d9d9; --text:#222; --muted:#666;
+    --good:#c6e0b4; --bad:#f4cccc;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#f6f7f9;color:var(--text);}
+  #login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px;}
+  #login-screen .lock{font-size:42px;}
+  #login-screen h1{font-size:20px;margin:0;}
+  #login-screen p{color:var(--muted);margin:0 0 8px;}
+  #login-screen input{padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;width:220px;}
+  #login-screen button{padding:10px 20px;border:none;border-radius:8px;background:var(--navy);color:#fff;font-size:15px;cursor:pointer;}
+  #login-error{color:#c62828;font-size:13px;height:16px;}
+
+  #app{display:none;}
+  header.topbar{background:var(--navy);color:#fff;padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;}
+  header.topbar h1{font-size:17px;margin:0;flex:1 1 auto;}
+  #sync-status{font-size:12px;padding:4px 10px;border-radius:12px;background:rgba(255,255,255,.15);}
+  #sync-status.ok{background:#2e7d32;}
+  nav.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5;}
+  nav.tabs button{padding:8px 14px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;color:var(--muted);}
+  nav.tabs button.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+  main{padding:18px 20px 60px;}
+  section.tab{display:none;}
+  section.tab.active{display:block;}
+
+  h2.section-title{color:var(--navy);font-size:16px;margin:0 0 4px;}
+  p.section-note{color:var(--muted);font-size:12.5px;margin:0 0 14px;}
+
+  .param-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:16px;}
+  .param-item{display:flex;flex-direction:column;gap:4px;}
+  .param-item label{font-size:12px;color:var(--muted);font-weight:bold;}
+  .param-item input{padding:6px 8px;border:1px solid var(--border);border-radius:6px;width:120px;background:var(--yellow);font-weight:bold;color:#1a1aff;}
+
+  .table-wrap{overflow-x:auto;background:#fff;border:1px solid var(--border);border-radius:10px;}
+  table{border-collapse:collapse;width:100%;min-width:900px;font-size:12.5px;}
+  th,td{border:1px solid var(--border);padding:6px 8px;text-align:center;white-space:nowrap;}
+  thead th{background:var(--navy);color:#fff;position:sticky;top:0;font-size:11.5px;}
+  thead tr.group th{background:#e9edf5;color:var(--navy);font-size:11px;}
+  thead tr.group th.g-normal{background:var(--green);color:#fff;}
+  thead tr.group th.g-kampanya{background:var(--orange);color:#fff;}
+  tbody tr:nth-child(even){background:var(--grey);}
+  td.left, th.left{text-align:left;}
+  td input{width:90px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center;}
+  td input.text{width:120px;text-align:left;}
+  td.input-cell{background:var(--yellow);}
+  td.input-cell input{background:var(--yellow);color:#1a1aff;font-weight:bold;}
+  td.computed{font-weight:bold;}
+  td.mantikli.evet{background:var(--good);}
+  td.mantikli.hayir{background:var(--bad);}
+  .best-cell{background:var(--good);font-weight:bold;color:#1f6b1f;}
+
+  .row-actions button{border:none;background:#c62828;color:#fff;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;}
+  .toolbar{margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;}
+  .toolbar button{padding:8px 14px;border:none;border-radius:8px;background:var(--navy);color:#fff;font-weight:bold;cursor:pointer;font-size:13px;}
+  .toolbar button.secondary{background:#607d8b;}
+
+  .empty-hint{color:var(--muted);font-size:12.5px;padding:14px;}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="lock">🔒</div>
+  <h1>Pazaryeri & Website Kâr Karşılaştırma</h1>
+  <p>Devam etmek için şifreyi girin</p>
+  <input type="password" id="password-input" placeholder="Şifre">
+  <button id="login-btn">Giriş</button>
+  <div id="login-error"></div>
+</div>
+
+<div id="app">
+  <header class="topbar">
+    <h1>📊 Pazaryeri & Website Kâr Karşılaştırma</h1>
+    <span id="sync-status">Bağlanıyor...</span>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="urunler" class="active">📦 Ürün Listesi</button>
+    <button data-tab="n11">N11</button>
+    <button data-tab="hb">Hepsiburada</button>
+    <button data-tab="trendyol">Trendyol</button>
+    <button data-tab="pazarama">Pazarama</button>
+    <button data-tab="website">🌐 Website</button>
+    <button data-tab="ozet">⭐ Özet</button>
+  </nav>
+
+  <main>
+    <section class="tab active" id="tab-urunler">
+      <h2 class="section-title">Ürün Listesi (Ortak Kaynak)</h2>
+      <p class="section-note">Ürünlerini burada bir kez tanımla; her pazaryeri ve Website sekmesi buradan otomatik çeker.</p>
+      <div class="toolbar"><button id="add-product-btn">+ Ürün Ekle</button></div>
+      <div class="table-wrap"><table id="urunler-table">
+        <thead><tr><th class="left">Kod</th><th class="left">Ürün Adı</th><th>Miktar</th><th>Maliyet (KDV Hariç) (TL)</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <section class="tab" id="tab-n11"></section>
+    <section class="tab" id="tab-hb"></section>
+    <section class="tab" id="tab-trendyol"></section>
+    <section class="tab" id="tab-pazarama"></section>
+
+    <section class="tab" id="tab-website">
+      <h2 class="section-title">Website — makerpazar.com (pazaryerlerinden bağımsız)</h2>
+      <p class="section-note">Maliyet KDV hariç, Satış Fiyatı KDV dahil girilir.</p>
+      <div class="param-box" id="website-params"></div>
+      <div class="table-wrap"><table id="website-table"></table></div>
+    </section>
+
+    <section class="tab" id="tab-ozet">
+      <h2 class="section-title">Özet — Tüm Kanallarda Net Kâr Karşılaştırması</h2>
+      <p class="section-note">Fiyat girilmemiş pazaryeri hiçbir zaman "en kârlı" olarak seçilmez.</p>
+      <div class="table-wrap"><table id="ozet-table"></table></div>
+    </section>
+  </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script>
+/* =========================================================
+   AYARLAR — deploy etmeden önce bunları kontrol et
+   ========================================================= */
+const APP_PASSWORD = "6026";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAnuQ5ECt92tpyD_Qo84xv4tPSDUyjU0R8",
+  authDomain: "nakit-takip.firebaseapp.com",
+  projectId: "nakit-takip",
+  storageBucket: "nakit-takip.firebasestorage.app",
+  messagingSenderId: "849727365719",
+  appId: "1:849727365719:web:8c5908a38a9462fb253912"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const urunlerRef = db.collection("pazaryeri_urunler");
+const ayarlarGenelRef = db.collection("pazaryeri_ayarlar").doc("genel");
+const ayarlarWebsiteRef = db.collection("pazaryeri_ayarlar").doc("website");
+
+/* =========================================================
+   HESAPLAMA MANTIĞI (Excel ile birebir aynı, test edildi)
+   ========================================================= */
+function stopaj(fiyat, kdv){ return (fiyat/(1+kdv))*0.01; }
+
+function hesaplaGenel(fiyat, komisyonOran, komisyonMultiplier, extraFees, sabitHizmet, kargo, maliyet, kdv){
+  fiyat = toNum(fiyat); komisyonOran = toNum(komisyonOran);
+  if (fiyat === null || isNaN(fiyat)) return null;
+  komisyonOran = komisyonOran || 0;
+  const komisyonTutar = komisyonMultiplier ? fiyat*(komisyonOran*(1+kdv)) : fiyat*komisyonOran;
+  let toplam = komisyonTutar;
+  const extraTutarlar = [];
+  for (const fee of extraFees){
+    const oran = toNum(fee.oran) || 0;
+    const t = fee.role === 'pazarlama' ? fiyat*(oran*(1+kdv)) : fiyat*oran;
+    extraTutarlar.push(t); toplam += t;
+  }
+  const st = stopaj(fiyat, kdv);
+  toplam += st;
+  if (sabitHizmet) toplam += (toNum(sabitHizmet)||0);
+  toplam += (toNum(kargo)||0);
+  const netHaric = (fiyat - toplam) / (1+kdv);
+  const netKar = netHaric - (toNum(maliyet)||0);
+  const marj = netHaric !== 0 ? netKar/netHaric : 0;
+  return { komisyonTutar, extraTutarlar, stopaj: st, toplamKesinti: toplam, netKar, marj };
+}
+
+function hesaplaWebsite(usdMaliyet, kur, ekMaliyet, satisFiyati, kdv, havaleOran, taksitOran, taksitLimit){
+  usdMaliyet=toNum(usdMaliyet)||0; kur=toNum(kur)||0; ekMaliyet=toNum(ekMaliyet)||0;
+  const maliyetTL = usdMaliyet*kur;
+  const toplamMaliyet = maliyetTL+ekMaliyet;
+  satisFiyati = toNum(satisFiyati);
+  if (satisFiyati === null || isNaN(satisFiyati)) {
+    return {maliyetTL, toplamMaliyet, satisKDVHaric:null, havaleFiyatiDahil:null, havaleFiyatiHaric:null,
+            taksitKomisyonTutar:null, pesinNetKar:null, pesinMarj:null, havaleNetKar:null, havaleMarj:null,
+            taksitNetKar:null, taksitMarj:null};
+  }
+  const satisKDVHaric = satisFiyati/(1+kdv);
+  const havaleFiyatiDahil = satisFiyati*(1-havaleOran);
+  const havaleFiyatiHaric = havaleFiyatiDahil/(1+kdv);
+  const taksitUygulanir = satisFiyati >= taksitLimit;
+  const taksitKomisyonTutar = taksitUygulanir ? satisFiyati*taksitOran : null;
+  const pesinNetKar = satisKDVHaric - toplamMaliyet;
+  const pesinMarj = satisKDVHaric !== 0 ? pesinNetKar/satisKDVHaric : 0;
+  const havaleNetKar = havaleFiyatiHaric - toplamMaliyet;
+  const havaleMarj = havaleFiyatiHaric !== 0 ? havaleNetKar/havaleFiyatiHaric : 0;
+  const taksitNetKar = taksitUygulanir ? satisKDVHaric - toplamMaliyet - taksitKomisyonTutar : null;
+  const taksitMarj = taksitUygulanir && satisKDVHaric!==0 ? taksitNetKar/satisKDVHaric : null;
+  return {maliyetTL, toplamMaliyet, satisKDVHaric, havaleFiyatiDahil, havaleFiyatiHaric, taksitKomisyonTutar,
+          pesinNetKar, pesinMarj, havaleNetKar, havaleMarj, taksitNetKar, taksitMarj};
+}
+
+function toNum(v){
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+  return isNaN(n) ? null : n;
+}
+function fmtTL(v){ return v===null||v===undefined||isNaN(v) ? "-" : v.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+" TL"; }
+function fmtPct(v){ return v===null||v===undefined||isNaN(v) ? "-" : (v*100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+"%"; }
+
+/* =========================================================
+   PAZARYERİ KONFİGÜRASYONLARI
+   ========================================================= */
+const MARKETS = [
+  { key:"n11", tabId:"tab-n11", title:"N11", komisyonMultiplier:false,
+    extraFees:[{key:"pazarlamaHizmetOrani", label:"Pazarlama Hizmet Oranı (%)", role:"pazarlama"},
+               {key:"pazarlamaNetOrani", label:"Pazarlama Net Oranı (%)", role:"pazarlama"}],
+    sabitHizmetKey:null },
+  { key:"hb", tabId:"tab-hb", title:"Hepsiburada", komisyonMultiplier:true,
+    extraFees:[{key:"tahsilatOrani", label:"Tahsilat Bedeli Oranı (%)", role:"tahsilat"}],
+    sabitHizmetKey:"sabitHizmet" },
+  { key:"trendyol", tabId:"tab-trendyol", title:"Trendyol", komisyonMultiplier:false,
+    extraFees:[], sabitHizmetKey:"sabitHizmet" },
+  { key:"pazarama", tabId:"tab-pazarama", title:"Pazarama", komisyonMultiplier:true,
+    extraFees:[], sabitHizmetKey:"sabitHizmet" },
+];
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let urunler = [];        // [{id, kod, ad, miktar, maliyet, n11:{...}, hb:{...}, ...}]
+let ayarlarGenel = { kdvOrani: 0.20 };
+let ayarlarWebsite = { kur: 41, kdvOrani: 0.20, taksitOrani: 0.0577, taksitLimit: 30000, havaleOrani: 0.03 };
+let activeTab = "urunler";
+
+function emptyMarketFields(mk){
+  const f = { fiyatNormal:null, komisyonNormal:null, fiyatKampanya:null, komisyonKampanya:null, kargo:null };
+  mk.extraFees.forEach(fee => f[fee.key] = null);
+  if (mk.sabitHizmetKey) f[mk.sabitHizmetKey] = null;
+  return f;
+}
+
+/* =========================================================
+   FIRESTORE SYNC
+   ========================================================= */
+let debounceTimers = {};
+function debouncedUpdate(docId, path, value, delay=500){
+  const key = docId+"|"+path;
+  clearTimeout(debounceTimers[key]);
+  debounceTimers[key] = setTimeout(() => {
+    urunlerRef.doc(docId).set(objFromPath(path, value), {merge:true}).catch(console.error);
+  }, delay);
+}
+function objFromPath(path, value){
+  const parts = path.split(".");
+  const obj = {};
+  let cur = obj;
+  parts.forEach((p,i) => { if (i===parts.length-1) cur[p]=value; else { cur[p]={}; cur=cur[p]; } });
+  return obj;
+}
+
+function initSync(){
+  urunlerRef.orderBy("createdAt","asc").onSnapshot(snap => {
+    urunler = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    document.getElementById("sync-status").textContent = "✓ Senkronize";
+    document.getElementById("sync-status").classList.add("ok");
+    renderAll();
+  }, err => { console.error(err); document.getElementById("sync-status").textContent = "Bağlantı hatası"; });
+
+  ayarlarGenelRef.onSnapshot(doc => {
+    if (doc.exists) ayarlarGenel = { kdvOrani:0.20, ...doc.data() };
+    renderAll();
+  });
+  ayarlarWebsiteRef.onSnapshot(doc => {
+    if (doc.exists) ayarlarWebsite = { kur:41, kdvOrani:0.20, taksitOrani:0.0577, taksitLimit:30000, havaleOrani:0.03, ...doc.data() };
+    renderAll();
+  });
+}
+
+/* =========================================================
+   ÜRÜN LİSTESİ TAB
+   ========================================================= */
+function renderUrunlerTab(){
+  const tbody = document.querySelector("#urunler-table tbody");
+  tbody.innerHTML = "";
+  if (urunler.length === 0){
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-hint">Henüz ürün yok. "+ Ürün Ekle" ile başla.</td></tr>';
+    return;
+  }
+  urunler.forEach(u => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="left input-cell"><input class="text" type="text" value="${esc(u.kod||"")}" data-field="kod"></td>
+      <td class="left input-cell"><input class="text" type="text" value="${esc(u.ad||"")}" data-field="ad"></td>
+      <td class="input-cell"><input type="number" value="${u.miktar??""}" data-field="miktar"></td>
+      <td class="input-cell"><input type="number" step="0.01" value="${u.maliyet??""}" data-field="maliyet"></td>
+      <td class="row-actions"><button data-del="${u.id}">Sil</button></td>`;
+    tr.querySelectorAll("input").forEach(inp => {
+      inp.addEventListener("change", () => {
+        const field = inp.dataset.field;
+        const val = (field==="kod"||field==="ad") ? inp.value : toNum(inp.value);
+        debouncedUpdate(u.id, field, val);
+      });
+    });
+    tr.querySelector("[data-del]").addEventListener("click", () => {
+      if (confirm(`"${u.ad||u.kod||'Bu ürün'}" silinsin mi? Tüm pazaryeri verileri de silinir.`)){
+        urunlerRef.doc(u.id).delete();
+      }
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById("add-product-btn").addEventListener("click", () => {
+  urunlerRef.add({
+    kod:"", ad:"", miktar:1, maliyet:0,
+    n11:emptyMarketFields(MARKETS[0]), hb:emptyMarketFields(MARKETS[1]),
+    trendyol:emptyMarketFields(MARKETS[2]), pazarama:emptyMarketFields(MARKETS[3]),
+    website:{usdMaliyet:null, ekMaliyet:null, satisFiyati:null},
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+});
+
+/* =========================================================
+   PAZARYERİ TABLARI (generic)
+   ========================================================= */
+function renderMarketTab(mk){
+  const section = document.getElementById(mk.tabId);
+  const kdv = toNum(ayarlarGenel.kdvOrani) ?? 0.20;
+
+  let cols = ["Kod","Ürün Adı","Miktar","Maliyet"];
+  mk.extraFees.forEach(f => cols.push(f.label));
+  if (mk.sabitHizmetKey) cols.push("Sabit Hizmet/Ücret (TL)");
+  cols.push("Kargo (TL)");
+  const normalCols = ["Satış Fiyatı (KDV Dahil)","Komisyon Oranı (%)","Komisyon Tutarı","Stopaj","Toplam Kesinti","Net Kâr (KDV Hariç)","Kâr Marjı"];
+  const kampanyaCols = normalCols.slice();
+
+  let html = `<h2 class="section-title">${mk.title} — Normal vs Kampanya</h2>
+  <div class="param-box"><div class="param-item"><label>KDV Oranı (genel, Parametreler'den)</label>
+  <input type="number" step="0.01" id="genel-kdv-input" value="${(kdv*100).toFixed(2)}"> %</div></div>
+  <div class="table-wrap"><table><thead>
+  <tr class="group"><th colspan="${cols.length}"></th><th colspan="7" class="g-normal">NORMAL FİYAT</th><th colspan="7" class="g-kampanya">KAMPANYA</th><th colspan="2"></th></tr>
+  <tr>${cols.map(c=>`<th>${c}</th>`).join("")}${normalCols.map(c=>`<th>${c}</th>`).join("")}${kampanyaCols.map(c=>`<th>${c}</th>`).join("")}<th>Net Kâr Farkı</th><th>Kampanya Mantıklı mı?</th></tr>
+  </thead><tbody></tbody></table></div>`;
+  section.innerHTML = html;
+
+  document.getElementById("genel-kdv-input").addEventListener("change", (e) => {
+    const v = toNum(e.target.value);
+    if (v !== null) ayarlarGenelRef.set({kdvOrani: v/100}, {merge:true});
+  });
+
+  const tbody = section.querySelector("tbody");
+  if (urunler.length === 0){
+    tbody.innerHTML = `<tr><td colspan="${cols.length+16}" class="empty-hint">Önce "Ürün Listesi" sekmesinden ürün ekle.</td></tr>`;
+    return;
+  }
+
+  urunler.forEach(u => {
+    const mdata = u[mk.key] || emptyMarketFields(mk);
+    const rNormal = hesaplaGenel(mdata.fiyatNormal, mdata.komisyonNormal, mk.komisyonMultiplier,
+      mk.extraFees.map(f=>({oran:mdata[f.key], role:f.role})), mk.sabitHizmetKey?mdata[mk.sabitHizmetKey]:null,
+      mdata.kargo, u.maliyet, kdv);
+    const rKampanya = hesaplaGenel(mdata.fiyatKampanya, mdata.komisyonKampanya, mk.komisyonMultiplier,
+      mk.extraFees.map(f=>({oran:mdata[f.key], role:f.role})), mk.sabitHizmetKey?mdata[mk.sabitHizmetKey]:null,
+      mdata.kargo, u.maliyet, kdv);
+
+    const fark = (rNormal && rKampanya) ? (rKampanya.netKar - rNormal.netKar) : null;
+    const mantikli = fark===null ? null : fark>0;
+
+    const tr = document.createElement("tr");
+    let tds = `<td class="left">${esc(u.kod||"")}</td><td class="left">${esc(u.ad||"")}</td><td>${u.miktar??""}</td><td>${fmtTL(u.maliyet)}</td>`;
+    mk.extraFees.forEach(f => {
+      tds += `<td class="input-cell"><input type="number" step="0.0001" value="${mdata[f.key]??""}" data-mk="${mk.key}" data-field="${f.key}"></td>`;
+    });
+    if (mk.sabitHizmetKey) tds += `<td class="input-cell"><input type="number" step="0.01" value="${mdata[mk.sabitHizmetKey]??""}" data-mk="${mk.key}" data-field="${mk.sabitHizmetKey}"></td>`;
+    tds += `<td class="input-cell"><input type="number" step="0.01" value="${mdata.kargo??""}" data-mk="${mk.key}" data-field="kargo"></td>`;
+
+    // normal
+    tds += `<td class="input-cell"><input type="number" step="0.01" value="${mdata.fiyatNormal??""}" data-mk="${mk.key}" data-field="fiyatNormal"></td>`;
+    tds += `<td class="input-cell"><input type="number" step="0.0001" value="${mdata.komisyonNormal??""}" data-mk="${mk.key}" data-field="komisyonNormal"></td>`;
+    tds += `<td class="computed">${rNormal?fmtTL(rNormal.komisyonTutar):"-"}</td>`;
+    tds += `<td class="computed">${rNormal?fmtTL(rNormal.stopaj):"-"}</td>`;
+    tds += `<td class="computed">${rNormal?fmtTL(rNormal.toplamKesinti):"-"}</td>`;
+    tds += `<td class="computed">${rNormal?fmtTL(rNormal.netKar):"-"}</td>`;
+    tds += `<td class="computed">${rNormal?fmtPct(rNormal.marj):"-"}</td>`;
+
+    // kampanya
+    tds += `<td class="input-cell"><input type="number" step="0.01" value="${mdata.fiyatKampanya??""}" data-mk="${mk.key}" data-field="fiyatKampanya"></td>`;
+    tds += `<td class="input-cell"><input type="number" step="0.0001" value="${mdata.komisyonKampanya??""}" data-mk="${mk.key}" data-field="komisyonKampanya"></td>`;
+    tds += `<td class="computed">${rKampanya?fmtTL(rKampanya.komisyonTutar):"-"}</td>`;
+    tds += `<td class="computed">${rKampanya?fmtTL(rKampanya.stopaj):"-"}</td>`;
+    tds += `<td class="computed">${rKampanya?fmtTL(rKampanya.toplamKesinti):"-"}</td>`;
+    tds += `<td class="computed">${rKampanya?fmtTL(rKampanya.netKar):"-"}</td>`;
+    tds += `<td class="computed">${rKampanya?fmtPct(rKampanya.marj):"-"}</td>`;
+
+    tds += `<td class="computed">${fark===null?"-":fmtTL(fark)}</td>`;
+    tds += `<td class="computed mantikli ${mantikli===null?"":(mantikli?"evet":"hayir")}">${mantikli===null?"-":(mantikli?"Evet":"Hayır")}</td>`;
+
+    tr.innerHTML = tds;
+    tr.querySelectorAll("input").forEach(inp => {
+      inp.addEventListener("change", () => {
+        const field = inp.dataset.field;
+        const val = toNum(inp.value);
+        debouncedUpdate(u.id, `${mk.key}.${field}`, val);
+      });
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+/* =========================================================
+   WEBSITE TAB
+   ========================================================= */
+function renderWebsiteTab(){
+  const pbox = document.getElementById("website-params");
+  const kdv = toNum(ayarlarWebsite.kdvOrani) ?? 0.20;
+  const wparams = [
+    {key:"kur", label:"Dolar Kuru (USD/TRY)", step:"0.0001"},
+    {key:"kdvOrani", label:"KDV Oranı", pct:true, step:"0.01"},
+    {key:"taksitOrani", label:"3 Taksit Komisyon Oranı", pct:true, step:"0.01"},
+    {key:"taksitLimit", label:"3 Taksit Alt Limiti (KDV Dahil, TL)", step:"1"},
+    {key:"havaleOrani", label:"Havale/EFT İndirim Oranı", pct:true, step:"0.01"},
+  ];
+  pbox.innerHTML = wparams.map(p => {
+    const raw = toNum(ayarlarWebsite[p.key]) ?? 0;
+    const shown = p.pct ? (raw*100).toFixed(2) : raw;
+    return `<div class="param-item"><label>${p.label}${p.pct?" (%)":""}</label>
+      <input type="number" step="${p.step}" value="${shown}" data-wparam="${p.key}" data-pct="${p.pct?1:0}"></div>`;
+  }).join("");
+  pbox.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const v = toNum(inp.value);
+      if (v===null) return;
+      const finalVal = inp.dataset.pct==="1" ? v/100 : v;
+      ayarlarWebsiteRef.set({[inp.dataset.wparam]: finalVal}, {merge:true});
+    });
+  });
+
+  const table = document.getElementById("website-table");
+  const headers = ["Kod","Ürün Adı","Miktar","Birim Maliyet (USD)","Ek Maliyet (TL)","Toplam Maliyet (TL)",
+    "Satış Fiyatı (KDV Dahil)","Havale Fiyatı (KDV Dahil)","3 Taksit Komisyon","Peşin Net Kâr","Peşin Marjı",
+    "Havale Net Kâr","Havale Marjı","3 Taksit Net Kâr","3 Taksit Marjı"];
+  let html = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>`;
+  if (urunler.length===0){
+    html += `<tr><td colspan="${headers.length}" class="empty-hint">Önce "Ürün Listesi" sekmesinden ürün ekle.</td></tr>`;
+  } else {
+    urunler.forEach(u => {
+      const w = u.website || {usdMaliyet:null, ekMaliyet:null, satisFiyati:null};
+      const r = hesaplaWebsite(w.usdMaliyet, ayarlarWebsite.kur, w.ekMaliyet, w.satisFiyati, kdv,
+        toNum(ayarlarWebsite.havaleOrani)??0.03, toNum(ayarlarWebsite.taksitOrani)??0.0577, toNum(ayarlarWebsite.taksitLimit)??30000);
+      html += `<tr>
+        <td class="left">${esc(u.kod||"")}</td><td class="left">${esc(u.ad||"")}</td><td>${u.miktar??""}</td>
+        <td class="input-cell"><input type="number" step="0.01" value="${w.usdMaliyet??""}" data-wf="usdMaliyet" data-id="${u.id}"></td>
+        <td class="input-cell"><input type="number" step="0.01" value="${w.ekMaliyet??""}" data-wf="ekMaliyet" data-id="${u.id}"></td>
+        <td class="computed">${fmtTL(r.toplamMaliyet)}</td>
+        <td class="input-cell"><input type="number" step="0.01" value="${w.satisFiyati??""}" data-wf="satisFiyati" data-id="${u.id}"></td>
+        <td class="computed">${fmtTL(r.havaleFiyatiDahil)}</td>
+        <td class="computed">${r.taksitKomisyonTutar===null?"-":fmtTL(r.taksitKomisyonTutar)}</td>
+        <td class="computed">${fmtTL(r.pesinNetKar)}</td><td class="computed">${fmtPct(r.pesinMarj)}</td>
+        <td class="computed">${fmtTL(r.havaleNetKar)}</td><td class="computed">${fmtPct(r.havaleMarj)}</td>
+        <td class="computed">${r.taksitNetKar===null?"-":fmtTL(r.taksitNetKar)}</td>
+        <td class="computed">${r.taksitMarj===null?"-":fmtPct(r.taksitMarj)}</td>
+      </tr>`;
+    });
+  }
+  html += "</tbody>";
+  table.innerHTML = html;
+  table.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const val = toNum(inp.value);
+      debouncedUpdate(inp.dataset.id, `website.${inp.dataset.wf}`, val);
+    });
+  });
+}
+
+/* =========================================================
+   ÖZET TAB
+   ========================================================= */
+function renderOzetTab(){
+  const table = document.getElementById("ozet-table");
+  const kdv = toNum(ayarlarGenel.kdvOrani) ?? 0.20;
+  let headers = ["Kod","Ürün Adı"];
+  MARKETS.forEach(mk => headers.push(`${mk.title} Normal`, `${mk.title} Kampanya`));
+  headers.push("En Kârlı (Normal)","En Kârlı (Kampanya)");
+  let html = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>`;
+  if (urunler.length===0){
+    html += `<tr><td colspan="${headers.length}" class="empty-hint">Önce "Ürün Listesi" sekmesinden ürün ekle.</td></tr>`;
+  } else {
+    urunler.forEach(u => {
+      const normalVals = [], kampanyaVals = [];
+      let row = `<td class="left">${esc(u.kod||"")}</td><td class="left">${esc(u.ad||"")}</td>`;
+      MARKETS.forEach(mk => {
+        const mdata = u[mk.key] || emptyMarketFields(mk);
+        const rN = hesaplaGenel(mdata.fiyatNormal, mdata.komisyonNormal, mk.komisyonMultiplier,
+          mk.extraFees.map(f=>({oran:mdata[f.key], role:f.role})), mk.sabitHizmetKey?mdata[mk.sabitHizmetKey]:null, mdata.kargo, u.maliyet, kdv);
+        const rK = hesaplaGenel(mdata.fiyatKampanya, mdata.komisyonKampanya, mk.komisyonMultiplier,
+          mk.extraFees.map(f=>({oran:mdata[f.key], role:f.role})), mk.sabitHizmetKey?mdata[mk.sabitHizmetKey]:null, mdata.kargo, u.maliyet, kdv);
+        normalVals.push({name:mk.title, val: rN?rN.netKar:null});
+        kampanyaVals.push({name:mk.title, val: rK?rK.netKar:null});
+        row += `<td class="computed">${rN?fmtTL(rN.netKar):"-"}</td><td class="computed">${rK?fmtTL(rK.netKar):"-"}</td>`;
+      });
+      const bestN = pickBest(normalVals);
+      const bestK = pickBest(kampanyaVals);
+      row += `<td class="best-cell">${bestN||"-"}</td><td class="best-cell">${bestK||"-"}</td>`;
+      html += `<tr>${row}</tr>`;
+    });
+  }
+  html += "</tbody>";
+  table.innerHTML = html;
+}
+
+function pickBest(list){
+  const valid = list.filter(x => x.val !== null && x.val !== undefined && !isNaN(x.val));
+  if (valid.length === 0) return null;
+  return valid.reduce((a,b) => b.val > a.val ? b : a).name;
+}
+
+/* =========================================================
+   TAB NAVİGASYON + YARDIMCI
+   ========================================================= */
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function renderAll(){
+  renderUrunlerTab();
+  MARKETS.forEach(mk => renderMarketTab(mk));
+  renderWebsiteTab();
+  renderOzetTab();
+}
+
+document.querySelectorAll("nav.tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll("section.tab").forEach(s=>s.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-"+btn.dataset.tab).classList.add("active");
+    activeTab = btn.dataset.tab;
+  });
+});
+
+/* =========================================================
+   GİRİŞ / ŞİFRE
+   ========================================================= */
+function tryLogin(){
+  const val = document.getElementById("password-input").value;
+  if (val === APP_PASSWORD){
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    sessionStorage.setItem("pz_auth", "1");
+    initSync();
+  } else {
+    document.getElementById("login-error").textContent = "Şifre yanlış.";
+  }
+}
+document.getElementById("login-btn").addEventListener("click", tryLogin);
+document.getElementById("password-input").addEventListener("keydown", e => { if (e.key==="Enter") tryLogin(); });
+
+if (sessionStorage.getItem("pz_auth") === "1"){
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  initSync();
+}
+</script>
+</body>
+</html>
