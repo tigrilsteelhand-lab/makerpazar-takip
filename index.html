@@ -9,6 +9,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAnuQ5ECt92tpyD_Qo84xv4tPSDUyjU0R8",
@@ -21,7 +22,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 const DOC_REF = doc(db, 'nakit', 'data');
+
+window._authSignIn = (email, pass) => signInWithEmailAndPassword(auth, email, pass);
+window._authSignOut = () => signOut(auth);
+window._authOnChange = (cb) => onAuthStateChanged(auth, cb);
 
 // Expose to global scope for main script
 window._fbSave = async (data) => {
@@ -120,6 +126,48 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .upcoming-item .u-date{color:var(--orange);font-family:'DM Mono',monospace;font-weight:600;font-size:11px;}
 .upcoming-item .u-desc{color:var(--text);}
 .upcoming-item .u-amt{color:var(--red);font-family:'DM Mono',monospace;font-weight:600;}
+.upcoming-item.income{background:var(--green-bg);}
+.upcoming-item.income .u-date{color:var(--green);}
+.upcoming-item.income .u-amt{color:var(--green);}
+.upcoming-more{font-size:11px;color:var(--text-3);padding:5px 4px;}
+
+/* Overdue strip (vadesi geçmiş) */
+.upcoming.overdue-box{border-color:var(--red);}
+.overdue-box .upcoming-title{color:var(--red);}
+.upcoming-item.overdue-item{background:var(--red-bg);}
+.upcoming-item.overdue-item .u-date{color:var(--red);}
+.upcoming-item.overdue-item.income .u-amt{color:var(--green);}
+.upcoming-item.overdue-item.expense .u-amt{color:var(--red);}
+.days-late{font-size:9px;color:var(--red);font-weight:700;margin-left:4px;background:rgba(184,58,34,.12);padding:1px 5px;border-radius:8px;}
+
+/* Copy button */
+.copy-btn{background:none;border:none;cursor:pointer;color:var(--text-3);font-size:13px;padding:2px 6px;border-radius:6px;transition:color .1s,background .1s;}
+.copy-btn:hover{color:var(--green);background:var(--green-bg);}
+
+/* Date filter */
+.filter-date{border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);background:var(--surface);}
+.today-jump-btn{background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;font-size:12px;color:var(--text-2);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap;}
+.today-jump-btn:hover{border-color:var(--accent);color:var(--accent);}
+tr.row-overdue td{background:var(--red-bg);}
+tr.row-overdue:hover td{filter:brightness(.97);}
+
+/* Manuel Vade Takibi */
+.manual-vade{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:1.25rem;}
+.manual-vade-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:10px;font-weight:500;}
+.manual-vade-form{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+.manual-vade-form input[type=text]{flex:1 1 240px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--text);}
+.manual-vade-form input[type=date]{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--text);}
+.manual-vade-form button{padding:7px 14px;border:none;border-radius:8px;background:var(--text);color:var(--bg);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.manual-vade-form button:hover{opacity:.85;}
+.manual-vade-list{display:flex;flex-direction:column;gap:6px;}
+.manual-vade-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:var(--surface2);font-size:12.5px;}
+.manual-vade-item.done{opacity:.5;}
+.manual-vade-item.done .mv-text{text-decoration:line-through;}
+.manual-vade-item .mv-date{font-family:'DM Mono',monospace;color:var(--text-3);font-size:11px;white-space:nowrap;}
+.manual-vade-item .mv-text{flex:1;}
+.manual-vade-item .mv-del{background:none;border:none;cursor:pointer;color:var(--text-3);font-size:15px;padding:2px 6px;border-radius:6px;line-height:1;}
+.manual-vade-item .mv-del:hover{color:var(--red);background:var(--red-bg);}
+.manual-vade-empty{color:var(--text-3);font-size:12px;padding:6px 2px;}
 
 /* Chart */
 .chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:1.25rem;}
@@ -432,8 +480,9 @@ td.drag-handle:hover { color: var(--text-2); }
   <div class="lock-box">
     <div class="lock-icon">🔒</div>
     <div class="lock-title" id="lockTitle">Nakit Akışı Takvimi</div>
-    <div class="lock-sub" id="lockSub">Devam etmek için şifreyi girin</div>
-    <input class="lock-input" type="password" id="lockInput" placeholder="••••••••" maxlength="32" autocomplete="off">
+    <div class="lock-sub" id="lockSub">Devam etmek için giriş yap</div>
+    <input class="lock-input" type="email" id="lockEmail" placeholder="E-posta" autocomplete="username" style="text-align:left;letter-spacing:normal;font-family:'DM Sans',sans-serif;margin-bottom:8px;">
+    <input class="lock-input" type="password" id="lockInput" placeholder="••••••••" maxlength="64" autocomplete="current-password">
     <button class="lock-btn" id="lockBtn">Giriş</button>
     <div class="lock-err" id="lockErr"></div>
   </div>
@@ -441,26 +490,39 @@ td.drag-handle:hover { color: var(--text-2); }
 
 <script>
 (function(){
-  const HASH = '192a0ec951af1334f7b5a82b123601b97efb89f9';
-  async function sha1(str) {
-    const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(str));
-    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  function waitForAuth(cb){
+    if (window._authOnChange) { cb(); return; }
+    document.addEventListener('fbReady', () => cb());
   }
+
   async function tryUnlock(){
-    const val = document.getElementById('lockInput').value;
-    const hash = await sha1(val);
-    if(hash === HASH){
-      document.getElementById('lockScreen').style.display='none';
-      sessionStorage.setItem('unlocked','1');
-    } else {
-      document.getElementById('lockErr').textContent='Şifre hatalı, tekrar deneyin.';
-      document.getElementById('lockInput').value='';
+    const email = document.getElementById('lockEmail').value.trim();
+    const pass = document.getElementById('lockInput').value;
+    const errEl = document.getElementById('lockErr');
+    errEl.textContent = '';
+    if (!email || !pass){ errEl.textContent = 'E-posta ve şifre gerekli.'; return; }
+    if (!window._authSignIn){ errEl.textContent = 'Bağlantı hazırlanıyor, birazdan tekrar dene.'; return; }
+
+    const btn = document.getElementById('lockBtn');
+    btn.disabled = true; btn.textContent = 'Giriş yapılıyor...';
+    try {
+      await window._authSignIn(email, pass);
+    } catch (err) {
+      const messages = {
+        'auth/invalid-email': 'Geçersiz e-posta adresi.',
+        'auth/user-not-found': 'Bu e-posta ile kayıtlı kullanıcı yok.',
+        'auth/wrong-password': 'Şifre yanlış.',
+        'auth/invalid-credential': 'E-posta veya şifre yanlış.',
+        'auth/too-many-requests': 'Çok fazla hatalı deneme. Biraz sonra tekrar dene.',
+      };
+      errEl.textContent = messages[err.code] || ('Giriş hatası: ' + err.message);
+      document.getElementById('lockInput').value = '';
       document.getElementById('lockInput').focus();
+    } finally {
+      btn.disabled = false; btn.textContent = 'Giriş';
     }
   }
-  if(sessionStorage.getItem('unlocked')==='1'){
-    document.getElementById('lockScreen').style.display='none';
-  }
+
   // Sync lock screen title from localStorage
   const savedTitle = localStorage.getItem('appTitle');
   const savedSub = localStorage.getItem('appSub');
@@ -468,7 +530,23 @@ td.drag-handle:hover { color: var(--text-2); }
   if (savedSub) document.getElementById('lockSub').textContent = savedSub;
   document.getElementById('lockBtn').addEventListener('click', tryUnlock);
   document.getElementById('lockInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
-  document.getElementById('lockInput').focus();
+  document.getElementById('lockEmail').addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
+  document.getElementById('lockEmail').focus();
+
+  let syncStarted = false;
+  waitForAuth(() => {
+    window._authOnChange(user => {
+      if (user) {
+        document.getElementById('lockScreen').style.display = 'none';
+        if (!syncStarted && window.initFirebaseSync) { syncStarted = true; window.initFirebaseSync(); }
+      } else {
+        document.getElementById('lockScreen').style.display = 'flex';
+        document.getElementById('lockInput').value = '';
+      }
+    });
+  });
+
+  window._doLogout = () => { if (window._authSignOut) window._authSignOut(); };
 })();
 </script>
 <div class="shell">
@@ -497,6 +575,7 @@ td.drag-handle:hover { color: var(--text-2); }
     <span id="syncDot" style="width:7px;height:7px;border-radius:50%;background:var(--text-3);display:inline-block;"></span>
     <span id="syncText">Bağlanıyor...</span>
   </div>
+  <button class="cari-btn" id="logoutBtn">Çıkış Yap</button>
   <button class="cari-btn" id="cariToggleBtn">📋 Cariler</button>
 </div>
 
@@ -535,9 +614,24 @@ td.drag-handle:hover { color: var(--text-2); }
   <div class="scard"><div class="scard-label">Yıl Sonu Tahmini</div><div class="scard-val bal" id="yearForecast">₺0</div><div class="scard-sub" id="forecastSub"></div></div>
 </div>
 
+<div class="upcoming overdue-box" id="overdueStrip">
+  <div class="upcoming-title">⚠️ Vadesi Geçmiş (Ödenmemiş / Tahsil Edilmemiş)</div>
+  <div class="upcoming-list" id="overdueList"></div>
+</div>
+
 <div class="upcoming" id="upcomingStrip">
-  <div class="upcoming-title">⏰ Önümüzdeki 30 Gün</div>
+  <div class="upcoming-title">⏰ Önümüzdeki 30 Gün (Gidecek Ödemeler)</div>
   <div class="upcoming-list" id="upcomingList"></div>
+</div>
+
+<div class="manual-vade">
+  <div class="manual-vade-title">📝 Manuel Vade Takibi</div>
+  <div class="manual-vade-form">
+    <input type="text" id="manualVadeText" placeholder="Ne takip etmek istiyorsun? Ör: X Ltd. 15.000₺ alacak">
+    <input type="date" id="manualVadeDate">
+    <button id="manualVadeAddBtn">+ Ekle</button>
+  </div>
+  <div class="manual-vade-list" id="manualVadeList"></div>
 </div>
 
 <div class="chart-wrap">
@@ -594,6 +688,10 @@ td.drag-handle:hover { color: var(--text-2); }
       <option value="income">Gelen</option>
       <option value="expense">Giden</option>
     </select>
+    <input class="filter-date" type="date" id="dateFromFilter" title="Başlangıç tarihi">
+    <input class="filter-date" type="date" id="dateToFilter" title="Bitiş tarihi">
+    <button class="today-jump-btn" id="clearDateFilterBtn" title="Tarih filtresini temizle">✕ Tarih</button>
+    <button class="today-jump-btn" id="jumpTodayBtn">📍 Bugün</button>
     <button class="filter-chip active" data-view="all" id="viewAll">Tümü</button>
     <button class="filter-chip" data-view="week" id="viewWeek">Haftalık</button>
   </div>
@@ -751,6 +849,7 @@ function loadData() {
       const d = JSON.parse(raw);
       if (!d.budgets) d.budgets = {};
       if (!d.caris) d.caris = [];
+      if (!d.manualVade) d.manualVade = [];
       return d;
     }
   } catch(e) {}
@@ -778,6 +877,7 @@ function initFirebaseSync() {
     data = remoteData;
     if (!data.budgets) data.budgets = {};
     if (!data.caris) data.caris = [];
+    if (!data.manualVade) data.manualVade = [];
     // Sync local backup
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
     const savedStart = data.startBalances[year];
@@ -876,8 +976,86 @@ function renderUpcoming() {
       <span class="u-desc">${x.desc}${x.cat?` <span class="cat-tag">${x.cat}</span>`:''}</span>
       <span class="u-amt">-${fmt(x.amount,true)}</span>
     </div>`;
-  }).join('');
+  }).join('') + (items.length > 8 ? `<div class="upcoming-more">+${items.length-8} tane daha</div>` : '');
 }
+
+function renderOverdue() {
+  const strip = document.getElementById('overdueStrip');
+  const list = document.getElementById('overdueList');
+  const now = new Date(); now.setHours(0,0,0,0);
+  const items = [];
+
+  for (let m = 0; m < 12; m++) {
+    getEntries(year, m).forEach(x => {
+      if (x.type !== 'expense') return;
+      if (x.frozen) return;
+      if (x.payStatus === 'paid') return;
+      const d = new Date(x.date); d.setHours(0,0,0,0);
+      if (d < now) items.push(x);
+    });
+  }
+  items.sort((a,b) => a.date.localeCompare(b.date));
+
+  if (items.length === 0) { strip.classList.remove('has-items'); return; }
+  strip.classList.add('has-items');
+  list.innerHTML = items.slice(0,8).map(x => {
+    const parts = x.date.split('-');
+    const d = new Date(x.date); d.setHours(0,0,0,0);
+    const daysLate = Math.round((now - d) / 86400000);
+    return `<div class="upcoming-item overdue-item">
+      <span class="u-date">${parts[2]}.${parts[1]}</span>
+      <span class="u-desc">${x.desc}${x.cat?` <span class="cat-tag">${x.cat}</span>`:''}<span class="days-late">${daysLate}g gecikti</span></span>
+      <span class="u-amt">-${fmt(x.amount,true)}</span>
+    </div>`;
+  }).join('') + (items.length > 8 ? `<div class="upcoming-more">+${items.length-8} tane daha</div>` : '');
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderManualVade(){
+  const list = document.getElementById('manualVadeList');
+  if (!list) return;
+  const items = (data.manualVade || []).slice().sort((a,b) => (a.date||'9999').localeCompare(b.date||'9999'));
+  if (items.length === 0) { list.innerHTML = '<div class="manual-vade-empty">Henüz bir şey eklemedin.</div>'; return; }
+  list.innerHTML = items.map(it => {
+    const dateHtml = it.date ? `<span class="mv-date">${it.date.split('-').reverse().join('.')}</span>` : '';
+    return `<div class="manual-vade-item ${it.done?'done':''}" data-id="${it.id}">
+      <input type="checkbox" class="mv-check" ${it.done?'checked':''}>
+      ${dateHtml}
+      <span class="mv-text">${esc(it.text)}</span>
+      <button class="mv-del" data-id="${it.id}" title="Sil">×</button>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.mv-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = cb.closest('.manual-vade-item').dataset.id;
+      const it = (data.manualVade||[]).find(x=>x.id===id);
+      if (it){ it.done = cb.checked; saveData(); renderManualVade(); }
+    });
+  });
+  list.querySelectorAll('.mv-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      data.manualVade = (data.manualVade||[]).filter(x=>x.id!==btn.dataset.id);
+      saveData(); renderManualVade();
+    });
+  });
+}
+
+function addManualVade(){
+  const textEl = document.getElementById('manualVadeText');
+  const dateEl = document.getElementById('manualVadeDate');
+  const text = textEl.value.trim();
+  if (!text) { textEl.focus(); return; }
+  if (!data.manualVade) data.manualVade = [];
+  data.manualVade.push({id: Date.now()+'-'+Math.random().toString(36).slice(2), text, date: dateEl.value || '', done:false});
+  saveData();
+  textEl.value = ''; dateEl.value = '';
+  textEl.focus();
+  renderManualVade();
+}
+document.getElementById('manualVadeAddBtn').addEventListener('click', addManualVade);
+document.getElementById('manualVadeText').addEventListener('keydown', e => { if (e.key==='Enter') addManualVade(); });
+document.getElementById('manualVadeDate').addEventListener('keydown', e => { if (e.key==='Enter') addManualVade(); });
 
 // --- Chart hit areas for tooltips ---
 let hitAreas = [];
@@ -1127,7 +1305,9 @@ function render() {
     fSub.textContent = '';
   }
 
+  renderOverdue();
   renderUpcoming();
+  renderManualVade();
   setTimeout(drawChart, 50);
   renderMonths();
   if (selectedMonth !== null) renderDetail(selectedMonth);
@@ -1176,9 +1356,16 @@ function renderMonths() {
         </div>`;
       })()}`;
     card.addEventListener('click', () => {
+      const wasOpen = selectedMonth === m;
       selectedMonth = selectedMonth===m ? null : m;
       render();
-      if (selectedMonth !== null) setTimeout(() => document.getElementById('detailPanel').scrollIntoView({behavior:'smooth',block:'nearest'}), 50);
+      if (selectedMonth !== null) {
+        setTimeout(() => document.getElementById('detailPanel').scrollIntoView({behavior:'smooth',block:'nearest'}), 50);
+        const now = new Date();
+        if (!wasOpen && now.getFullYear() === year && now.getMonth() === m) {
+          setTimeout(scrollToTodayRow, 250);
+        }
+      }
     });
     grid.appendChild(card);
   });
@@ -1188,10 +1375,14 @@ function getFilteredEntries(m) {
   const search = document.getElementById('searchInput').value.toLowerCase();
   const cat = document.getElementById('catFilter').value;
   const type = document.getElementById('typeFilter').value;
+  const dateFrom = document.getElementById('dateFromFilter').value;
+  const dateTo = document.getElementById('dateToFilter').value;
   return getEntries(year, m)
     .filter(x => (!search || x.desc.toLowerCase().includes(search) || (x.cat||'').toLowerCase().includes(search) || (x.note||'').toLowerCase().includes(search)))
     .filter(x => !cat || x.cat === cat)
     .filter(x => !type || x.type === type)
+    .filter(x => !dateFrom || x.date >= dateFrom)
+    .filter(x => !dateTo || x.date <= dateTo)
     .sort((a,b) => a.date.localeCompare(b.date));
 }
 
@@ -1275,7 +1466,8 @@ function renderTable(m) {
     const rowDate = new Date(x.date); rowDate.setHours(0,0,0,0);
     const isToday = rowDate.getTime() === today.getTime();
     const isPast = rowDate < today;
-    const dateRowClass = isFrozen ? 'frozen-row' : isToday ? 'row-today' : isPast ? 'row-past' : '';
+    const isOverdue = isPast && !isFrozen && x.type === 'expense' && !isPaid;
+    const dateRowClass = isFrozen ? 'frozen-row' : isToday ? 'row-today' : isOverdue ? 'row-overdue' : isPast ? 'row-past' : '';
     const todayPill = isToday ? `<span class="today-pill">BUGÜN</span>` : '';
 
     return `<tr class="${dateRowClass}" draggable="true" data-id="${x.id}" data-date="${x.date}">
@@ -1287,6 +1479,7 @@ function renderTable(m) {
       <td style="text-align:right">${isFrozen?'<span style="color:var(--text-3);font-size:11px;font-family:\'DM Mono\',monospace">—</span>':`<span class="kasa-badge ${bc}">${fmt(runBal,true)}</span>`}</td>
       <td style="text-align:center">${payHtml}</td>
       <td style="white-space:nowrap">
+        <button class="copy-btn" data-id="${x.id}" title="Kopyala (yeni hareket olarak ekler)">⧉</button>
         <button class="freeze-btn${isFrozen?' frozen':''}" data-id="${x.id}" title="${isFrozen?'Aktif Et':'Dondur'}">❄</button>
         <button class="edit-btn" data-id="${x.id}" title="Düzenle">✎</button>
         <button class="del-btn" data-id="${x.id}" title="Sil">×</button>
@@ -1367,6 +1560,12 @@ function renderTable(m) {
       saveData(); showToast('Hareket silindi'); render();
     });
   });
+  wrap.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const entry = (data.entries[getKey(year,m)]||[]).find(x=>x.id===btn.dataset.id);
+      if (entry) openModal(entry, 'copy');
+    });
+  });
   wrap.querySelectorAll('.edit-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const entry = (data.entries[getKey(year,m)]||[]).find(x=>x.id===btn.dataset.id);
@@ -1432,8 +1631,25 @@ function renderWeekly(m) {
   wrap.innerHTML = html;
 }
 
-function openModal(entry) {
+function openModal(entry, mode) {
   if (selectedMonth === null) return;
+  if (entry && mode === 'copy') {
+    editingId = null;
+    document.getElementById('modalTitle').textContent = 'Hareketi Kopyala';
+    document.getElementById('eType').value = entry.type;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    document.getElementById('eDate').value = (today.getFullYear() === year) ? todayStr : entry.date;
+    document.getElementById('eDesc').value = entry.desc;
+    document.getElementById('eAmount').value = entry.amount;
+    document.getElementById('eCat').value = entry.cat || '';
+    document.getElementById('eNote').value = entry.note || '';
+    document.getElementById('eRecurring').checked = false;
+    document.getElementById('recurringRow').style.display = 'flex';
+    document.getElementById('overlay').classList.add('open');
+    setTimeout(() => { const el = document.getElementById('eAmount'); el.focus(); el.select(); }, 100);
+    return;
+  }
   if (entry) {
     editingId = entry.id;
     document.getElementById('modalTitle').textContent = 'Hareketi Düzenle';
@@ -1632,6 +1848,30 @@ document.getElementById('budgetSaveBtn').addEventListener('click', ()=>{
 document.getElementById('searchInput').addEventListener('input', ()=>{ if(selectedMonth!==null) renderDetail(selectedMonth); });
 document.getElementById('catFilter').addEventListener('change', ()=>{ if(selectedMonth!==null) renderDetail(selectedMonth); });
 document.getElementById('typeFilter').addEventListener('change', ()=>{ if(selectedMonth!==null) renderDetail(selectedMonth); });
+document.getElementById('dateFromFilter').addEventListener('change', ()=>{ if(selectedMonth!==null) renderDetail(selectedMonth); });
+document.getElementById('dateToFilter').addEventListener('change', ()=>{ if(selectedMonth!==null) renderDetail(selectedMonth); });
+document.getElementById('clearDateFilterBtn').addEventListener('click', ()=>{
+  document.getElementById('dateFromFilter').value = '';
+  document.getElementById('dateToFilter').value = '';
+  if(selectedMonth!==null) renderDetail(selectedMonth);
+});
+document.getElementById('jumpTodayBtn').addEventListener('click', () => {
+  const today = new Date();
+  if (today.getFullYear() !== year) { showToast('Bugün seçili yılda değil'); return; }
+  const m = today.getMonth();
+  if (selectedMonth !== m) {
+    selectedMonth = m;
+    render();
+    setTimeout(() => document.getElementById('detailPanel').scrollIntoView({behavior:'smooth',block:'nearest'}), 50);
+  }
+  setTimeout(() => scrollToTodayRow(true), selectedMonth === m ? 60 : 200);
+});
+
+function scrollToTodayRow(showMsgIfMissing){
+  const row = document.querySelector('#entriesWrap tr.row-today');
+  if (row) row.scrollIntoView({behavior:'smooth', block:'center'});
+  else if (showMsgIfMissing) showToast('Bu ayda bugüne ait hareket yok');
+}
 
 // View toggle
 document.getElementById('viewAll').addEventListener('click', ()=>{
@@ -1760,8 +2000,7 @@ initEditableLabel('appTitle', 'appTitle', 'Nakit Akışı Takvimi');
 initEditableLabel('appSub', 'appSub', 'Gelen & giden ödeme takibi');
 document.title = document.getElementById('appTitle').textContent;
 
-// Start Firebase sync
-initFirebaseSync();
+// Firebase sync starts automatically once the user is authenticated (see lock-screen script above)
 
 // --- Cari ---
 let editingCariId = null;
@@ -1907,6 +2146,7 @@ function saveCari() {
   const note = document.getElementById('cariNote').value.trim();
 
   if (!data.caris) data.caris = [];
+  if (!data.manualVade) data.manualVade = [];
   if (editingCariId) {
     const idx = data.caris.findIndex(x => x.id === editingCariId);
     if (idx !== -1) data.caris[idx] = {...data.caris[idx], name, type, cat, logo, note};
@@ -1918,6 +2158,9 @@ function saveCari() {
   saveData(); closeCariModal(); renderCariPanel();
 }
 
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  if (window._doLogout) window._doLogout();
+});
 document.getElementById('cariToggleBtn').addEventListener('click', () => {
   const p = document.getElementById('cariPanel');
   p.classList.toggle('visible');
@@ -1930,8 +2173,8 @@ document.getElementById('cariOverlay').addEventListener('click', e => { if(e.tar
 
 // Render quick picks when modal opens
 const _origOpenModal = openModal;
-openModal = function(entry) {
-  _origOpenModal(entry);
+openModal = function(entry, mode) {
+  _origOpenModal(entry, mode);
   setTimeout(renderCariQuickPicks, 50);
 };
 
@@ -1961,6 +2204,7 @@ document.getElementById('jsonFileInput').addEventListener('change', function() {
       data = parsed;
       if (!data.budgets) data.budgets = {};
       if (!data.caris) data.caris = [];
+      if (!data.manualVade) data.manualVade = [];
       saveData();
       const s = data.startBalances[year];
       if (s !== undefined) document.getElementById('startBalance').value = s;
