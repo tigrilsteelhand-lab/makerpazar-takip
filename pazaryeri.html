@@ -99,8 +99,9 @@
 <div id="login-screen">
   <div class="lock">🔒</div>
   <h1>Pazaryeri & Website Kâr Karşılaştırma</h1>
-  <p>Devam etmek için şifreyi girin</p>
-  <input type="password" id="password-input" placeholder="Şifre">
+  <p>Devam etmek için giriş yap</p>
+  <input type="email" id="email-input" placeholder="E-posta" autocomplete="username">
+  <input type="password" id="password-input" placeholder="Şifre" autocomplete="current-password">
   <button id="login-btn">Giriş</button>
   <div id="login-error"></div>
 </div>
@@ -109,6 +110,7 @@
   <header class="topbar">
     <h1>📊 Pazaryeri & Website Kâr Karşılaştırma</h1>
     <span id="sync-status">Bağlanıyor...</span>
+    <button id="logout-btn" style="padding:6px 12px;border:none;border-radius:6px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:12px;">Çıkış Yap</button>
   </header>
 
   <nav class="tabs">
@@ -177,12 +179,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script>
 /* =========================================================
-   AYARLAR — deploy etmeden önce bunları kontrol et
+   AYARLAR
    ========================================================= */
-const APP_PASSWORD = "6026";
-
 const firebaseConfig = {
   apiKey: "AIzaSyAnuQ5ECt92tpyD_Qo84xv4tPSDUyjU0R8",
   authDomain: "nakit-takip.firebaseapp.com",
@@ -194,6 +195,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 const urunlerRef = db.collection("pazaryeri_urunler");
 const ayarlarGenelRef = db.collection("pazaryeri_ayarlar").doc("genel");
 const ayarlarWebsiteRef = db.collection("pazaryeri_ayarlar").doc("website");
@@ -297,7 +299,7 @@ const MARKETS = [
    STATE
    ========================================================= */
 let urunler = [];        // [{id, kod, ad, kategori, maliyet(USD, KDV Hariç), n11:{...}, hb:{...}, ...}]
-let ayarlarGenel = { kdvOrani: 0.20, kur: 41 };
+let ayarlarGenel = { kdvOrani: 0.20, kur: 41, defaults: {} };
 let selectedIds = new Set();
 let filterState = { text: "", kategori: "" };
 let ozetSort = { col: null, dir: 1 };
@@ -312,6 +314,18 @@ function emptyMarketFields(mk){
   return f;
 }
 
+// Yeni ürün eklerken, "Tümüne Uygula" satırına kaydedilmiş sabit varsayılanları kullanır
+// (fiyat alanları hariç — fiyat her zaman ürüne özgüdür, varsayılanı olmaz).
+function defaultMarketFields(mk){
+  const f = emptyMarketFields(mk);
+  const d = (ayarlarGenel.defaults && ayarlarGenel.defaults[mk.key]) || {};
+  Object.keys(f).forEach(key => {
+    if (key === "fiyatNormal" || key === "fiyatKampanya") return;
+    if (d[key] !== undefined && d[key] !== null) f[key] = d[key];
+  });
+  return f;
+}
+
 /* =========================================================
    FIRESTORE SYNC
    ========================================================= */
@@ -320,7 +334,7 @@ function debouncedUpdate(docId, path, value, delay=500){
   const key = docId+"|"+path;
   clearTimeout(debounceTimers[key]);
   debounceTimers[key] = setTimeout(() => {
-    urunlerRef.doc(docId).set(objFromPath(path, value), {merge:true}).catch(console.error);
+    urunlerRef.doc(docId).set(objFromPath(path, value), {merge:true}).catch(handleFirestoreError);
   }, delay);
 }
 function objFromPath(path, value){
@@ -337,10 +351,15 @@ function initSync(){
     document.getElementById("sync-status").textContent = "✓ Senkronize";
     document.getElementById("sync-status").classList.add("ok");
     renderAll();
-  }, err => { console.error(err); document.getElementById("sync-status").textContent = "Bağlantı hatası"; });
+  }, err => {
+    console.error(err);
+    const msg = err && err.code === "permission-denied" ? "İzin hatası (Rules kontrol et)" : "Bağlantı hatası";
+    document.getElementById("sync-status").textContent = msg;
+  });
 
   ayarlarGenelRef.onSnapshot(doc => {
-    if (doc.exists) ayarlarGenel = { kdvOrani:0.20, kur:41, ...doc.data() };
+    if (doc.exists) ayarlarGenel = { kdvOrani:0.20, kur:41, defaults:{}, ...doc.data() };
+    if (!ayarlarGenel.defaults) ayarlarGenel.defaults = {};
     renderAll();
   });
   ayarlarWebsiteRef.onSnapshot(doc => {
@@ -405,7 +424,7 @@ function renderUrunlerTab(){
     });
     tr.querySelector("[data-del]").addEventListener("click", () => {
       if (confirm(`"${u.ad||u.kod||'Bu ürün'}" silinsin mi? Tüm pazaryeri verileri de silinir.`)){
-        urunlerRef.doc(u.id).delete();
+        urunlerRef.doc(u.id).delete().catch(handleFirestoreError);
       }
     });
     tbody.appendChild(tr);
@@ -436,20 +455,32 @@ document.getElementById("delete-selected-btn").addEventListener("click", async (
   const n = selectedIds.size;
   if (n === 0) return;
   if (!confirm(`${n} ürün silinsin mi? Tüm pazaryeri verileri de silinir. Bu işlem geri alınamaz.`)) return;
-  const batch = db.batch();
-  Array.from(selectedIds).forEach(id => batch.delete(urunlerRef.doc(id)));
-  await batch.commit();
-  selectedIds.clear();
+  try {
+    const batch = db.batch();
+    Array.from(selectedIds).forEach(id => batch.delete(urunlerRef.doc(id)));
+    await batch.commit();
+    selectedIds.clear();
+  } catch (err) { handleFirestoreError(err); }
 });
+
+function handleFirestoreError(err){
+  console.error(err);
+  let msg = "Firestore hatası: " + (err && err.message ? err.message : err);
+  if (err && err.code === "permission-denied"){
+    msg = "İzin hatası (permission-denied). Firebase Console → Firestore Database → Rules kısmına " +
+          "'pazaryeri_urunler' ve 'pazaryeri_ayarlar' koleksiyonları için izin eklediğinden emin ol.";
+  }
+  alert(msg);
+}
 
 document.getElementById("add-product-btn").addEventListener("click", () => {
   urunlerRef.add({
     kod:"", ad:"", kategori:"", maliyet:0,
-    n11:emptyMarketFields(MARKETS[0]), hb:emptyMarketFields(MARKETS[1]),
-    trendyol:emptyMarketFields(MARKETS[2]), pazarama:emptyMarketFields(MARKETS[3]),
+    n11:defaultMarketFields(MARKETS[0]), hb:defaultMarketFields(MARKETS[1]),
+    trendyol:defaultMarketFields(MARKETS[2]), pazarama:defaultMarketFields(MARKETS[3]),
     website:{ekMaliyet:null, satisFiyati:null},
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
+  }).catch(handleFirestoreError);
 });
 
 /* ---- Şablon indir ---- */
@@ -516,8 +547,8 @@ document.getElementById("import-file").addEventListener("change", (e) => {
           const ref = urunlerRef.doc();
           batch.set(ref, {
             kod, ad, maliyet: maliyet ?? 0, kategori,
-            n11:emptyMarketFields(MARKETS[0]), hb:emptyMarketFields(MARKETS[1]),
-            trendyol:emptyMarketFields(MARKETS[2]), pazarama:emptyMarketFields(MARKETS[3]),
+            n11:defaultMarketFields(MARKETS[0]), hb:defaultMarketFields(MARKETS[1]),
+            trendyol:defaultMarketFields(MARKETS[2]), pazarama:defaultMarketFields(MARKETS[3]),
             website:{ekMaliyet:null, satisFiyati:null},
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
@@ -529,7 +560,9 @@ document.getElementById("import-file").addEventListener("change", (e) => {
       statusEl.textContent = `✓ ${eklenen} yeni ürün eklendi, ${guncellenen} ürün güncellendi${atlanan?`, ${atlanan} satır (kod boş) atlandı`:""}.`;
     } catch (err){
       console.error(err);
-      statusEl.textContent = "Hata: dosya okunamadı. Şablon formatına uygun mu kontrol et.";
+      statusEl.textContent = err && err.code === "permission-denied"
+        ? "İzin hatası: Firestore Rules'a pazaryeri_urunler için izin eklendiğinden emin ol."
+        : "Hata: dosya okunamadı ya da yazılamadı. Şablon formatına uygun mu kontrol et.";
     }
     e.target.value = "";
   };
@@ -579,7 +612,9 @@ document.getElementById("json-import-file").addEventListener("change", (e) => {
       statusEl.textContent = `✓ JSON yedek yüklendi (${payload.urunler?.length||0} ürün işlendi).`;
     } catch (err){
       console.error(err);
-      statusEl.textContent = "Hata: JSON dosyası okunamadı.";
+      statusEl.textContent = err && err.code === "permission-denied"
+        ? "İzin hatası: Firestore Rules'a pazaryeri_urunler için izin eklendiğinden emin ol."
+        : "Hata: JSON dosyası okunamadı ya da yazılamadı.";
     }
     e.target.value = "";
   };
@@ -607,9 +642,11 @@ document.getElementById("bulk-price-apply-btn").addEventListener("click", async 
     if (toNum(w.satisFiyati) !== null) updates["website.satisFiyati"] = round2(toNum(w.satisFiyati) * factor);
     if (Object.keys(updates).length > 0) batch.set(urunlerRef.doc(u.id), updates, {merge:true});
   });
-  await batch.commit();
-  document.getElementById("bulk-price-pct").value = "";
-  document.getElementById("import-status").textContent = `✓ ${targets.length} ürünün fiyatlarına %${pct} uygulandı.`;
+  try {
+    await batch.commit();
+    document.getElementById("bulk-price-pct").value = "";
+    document.getElementById("import-status").textContent = `✓ ${targets.length} ürünün fiyatlarına %${pct} uygulandı.`;
+  } catch (err) { handleFirestoreError(err); }
 });
 function round2(n){ return Math.round(n*100)/100; }
 
@@ -643,11 +680,11 @@ function renderMarketTab(mk){
 
   document.getElementById("genel-kdv-input").addEventListener("change", (e) => {
     const v = toNum(e.target.value);
-    if (v !== null) ayarlarGenelRef.set({kdvOrani: v/100}, {merge:true});
+    if (v !== null) ayarlarGenelRef.set({kdvOrani: v/100}, {merge:true}).catch(handleFirestoreError);
   });
   document.getElementById("genel-kur-input").addEventListener("change", (e) => {
     const v = toNum(e.target.value);
-    if (v !== null) ayarlarGenelRef.set({kur: v}, {merge:true});
+    if (v !== null) ayarlarGenelRef.set({kur: v}, {merge:true}).catch(handleFirestoreError);
   });
 
   const tbody = section.querySelector("tbody");
@@ -661,32 +698,56 @@ function renderMarketTab(mk){
     return;
   }
 
-  // ---- Tümüne Uygula (bulk-fill) satırı ----
+  // ---- Sabit Değer / Tümüne Uygula satırı ----
+  const mkDefaults = (ayarlarGenel.defaults && ayarlarGenel.defaults[mk.key]) || {};
+  const bulkStatusId = `bulk-status-${mk.key}`;
   const bulkRow = document.createElement("tr");
   bulkRow.className = "bulk-fill-row";
-  let bulkTds = `<td class="left col-sticky-1" colspan="1" style="font-weight:bold;color:var(--navy);font-size:10px;">↓ Uygula</td><td class="col-sticky-2"></td><td></td><td></td>`;
+  const bulkInput = (field, step) => {
+    const v = mkDefaults[field];
+    return `<input type="number" step="${step}" placeholder="sabit değer" value="${v??""}" data-bulk-field="${field}">`;
+  };
+  let bulkTds = `<td class="left col-sticky-1" style="font-weight:bold;color:var(--navy);font-size:10px;">⚙ Sabit Değer</td><td class="col-sticky-2" style="font-size:10px;color:var(--muted);" id="${bulkStatusId}">yeni ürüne otomatik gelir</td><td></td><td></td>`;
   mk.extraFees.forEach(f => {
-    bulkTds += `<td class="input-cell"><input type="number" step="0.0001" placeholder="tümüne" data-bulk-field="${f.key}"></td>`;
+    bulkTds += `<td class="input-cell">${bulkInput(f.key, "0.0001")}</td>`;
   });
-  if (mk.sabitHizmetKey) bulkTds += `<td class="input-cell"><input type="number" step="0.01" placeholder="tümüne" data-bulk-field="${mk.sabitHizmetKey}"></td>`;
-  bulkTds += `<td class="input-cell"><input type="number" step="0.01" placeholder="tümüne" data-bulk-field="kargo"></td>`;
+  if (mk.sabitHizmetKey) bulkTds += `<td class="input-cell">${bulkInput(mk.sabitHizmetKey, "0.01")}</td>`;
+  bulkTds += `<td class="input-cell">${bulkInput("kargo", "0.01")}</td>`;
   // Normal blok: Fiyat (boş) + Komisyon Oranı (bulk) + 5 hesaplanan hücre (boş)
-  bulkTds += `<td></td><td class="input-cell"><input type="number" step="0.0001" placeholder="tümüne" data-bulk-field="komisyonNormal"></td><td></td><td></td><td></td><td></td><td></td>`;
+  bulkTds += `<td></td><td class="input-cell">${bulkInput("komisyonNormal", "0.0001")}</td><td></td><td></td><td></td><td></td><td></td>`;
   // Kampanya blok: aynı düzen
-  bulkTds += `<td></td><td class="input-cell"><input type="number" step="0.0001" placeholder="tümüne" data-bulk-field="komisyonKampanya"></td><td></td><td></td><td></td><td></td><td></td>`;
+  bulkTds += `<td></td><td class="input-cell">${bulkInput("komisyonKampanya", "0.0001")}</td><td></td><td></td><td></td><td></td><td></td>`;
   bulkTds += `<td></td><td></td>`;
   bulkRow.innerHTML = bulkTds;
   bulkRow.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("change", async () => {
-      const val = toNum(inp.value);
-      if (val === null) return;
       const field = inp.dataset.bulkField;
-      const targets = getFilteredUrunler();
-      const batch = db.batch();
-      targets.forEach(u => { batch.set(urunlerRef.doc(u.id), objFromPath(`${mk.key}.${field}`, val), {merge:true}); });
-      await batch.commit();
-      inp.value = "";
-      inp.placeholder = `✓ ${targets.length} ürüne uygulandı`;
+      const val = toNum(inp.value);
+      const statusEl = document.getElementById(bulkStatusId);
+      const hadDefault = mkDefaults[field] !== undefined && mkDefaults[field] !== null;
+
+      if (val === null){
+        // Kutu boşaltıldı: sadece varsayılanı temizle, mevcut ürünlere dokunma.
+        if (!hadDefault) return; // zaten boştu, yapacak bir şey yok
+        statusEl.textContent = "temizleniyor...";
+        try {
+          await ayarlarGenelRef.set(objFromPath(`defaults.${mk.key}.${field}`, null), {merge:true});
+          statusEl.textContent = "✓ sabit değer temizlendi (mevcut ürünler değişmedi)";
+        } catch (err) { handleFirestoreError(err); statusEl.textContent = "yeni ürüne otomatik gelir"; }
+        return;
+      }
+
+      statusEl.textContent = "uygulanıyor...";
+      try {
+        // 1) Bundan sonra eklenecek ürünler için sabit değeri kaydet
+        await ayarlarGenelRef.set(objFromPath(`defaults.${mk.key}.${field}`, val), {merge:true});
+        // 2) Şu an görünen mevcut ürünlere de uygula
+        const targets = getFilteredUrunler();
+        const batch = db.batch();
+        targets.forEach(u => { batch.set(urunlerRef.doc(u.id), objFromPath(`${mk.key}.${field}`, val), {merge:true}); });
+        await batch.commit();
+        statusEl.textContent = `✓ ${targets.length} ürüne uygulandı, yeni ürünlere otomatik gelecek`;
+      } catch (err) { handleFirestoreError(err); statusEl.textContent = "yeni ürüne otomatik gelir"; }
     });
   });
   tbody.appendChild(bulkRow);
@@ -771,7 +832,7 @@ function renderWebsiteTab(){
       const v = toNum(inp.value);
       if (v===null) return;
       const finalVal = inp.dataset.pct==="1" ? v/100 : v;
-      ayarlarWebsiteRef.set({[inp.dataset.wparam]: finalVal}, {merge:true});
+      ayarlarWebsiteRef.set({[inp.dataset.wparam]: finalVal}, {merge:true}).catch(handleFirestoreError);
     });
   });
 
@@ -958,27 +1019,52 @@ document.querySelectorAll("nav.tabs button").forEach(btn => {
 });
 
 /* =========================================================
-   GİRİŞ / ŞİFRE
+   GİRİŞ / ÇIKIŞ (Firebase Authentication)
    ========================================================= */
+let syncStarted = false;
+
 function tryLogin(){
-  const val = document.getElementById("password-input").value;
-  if (val === APP_PASSWORD){
-    document.getElementById("login-screen").style.display = "none";
-    document.getElementById("app").style.display = "block";
-    sessionStorage.setItem("pz_auth", "1");
-    initSync();
-  } else {
-    document.getElementById("login-error").textContent = "Şifre yanlış.";
-  }
+  const email = document.getElementById("email-input").value.trim();
+  const pass = document.getElementById("password-input").value;
+  const errEl = document.getElementById("login-error");
+  errEl.textContent = "";
+  if (!email || !pass){ errEl.textContent = "E-posta ve şifre gerekli."; return; }
+
+  const btn = document.getElementById("login-btn");
+  btn.disabled = true; btn.textContent = "Giriş yapılıyor...";
+
+  auth.signInWithEmailAndPassword(email, pass)
+    .catch(err => {
+      const messages = {
+        "auth/invalid-email": "Geçersiz e-posta adresi.",
+        "auth/user-not-found": "Bu e-posta ile kayıtlı kullanıcı yok.",
+        "auth/wrong-password": "Şifre yanlış.",
+        "auth/invalid-credential": "E-posta veya şifre yanlış.",
+        "auth/too-many-requests": "Çok fazla hatalı deneme. Biraz sonra tekrar dene.",
+      };
+      errEl.textContent = messages[err.code] || ("Giriş hatası: " + err.message);
+    })
+    .finally(() => { btn.disabled = false; btn.textContent = "Giriş"; });
 }
 document.getElementById("login-btn").addEventListener("click", tryLogin);
 document.getElementById("password-input").addEventListener("keydown", e => { if (e.key==="Enter") tryLogin(); });
+document.getElementById("email-input").addEventListener("keydown", e => { if (e.key==="Enter") tryLogin(); });
 
-if (sessionStorage.getItem("pz_auth") === "1"){
-  document.getElementById("login-screen").style.display = "none";
-  document.getElementById("app").style.display = "block";
-  initSync();
-}
+document.getElementById("logout-btn").addEventListener("click", () => {
+  auth.signOut();
+});
+
+auth.onAuthStateChanged(user => {
+  if (user){
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    if (!syncStarted){ syncStarted = true; initSync(); }
+  } else {
+    document.getElementById("app").style.display = "none";
+    document.getElementById("login-screen").style.display = "flex";
+    document.getElementById("password-input").value = "";
+  }
+});
 </script>
 </body>
 </html>
