@@ -67,6 +67,8 @@ document.dispatchEvent(new Event('fbReady'));
   --red:#b83a22; --red-bg:#fdecea; --red-mid:#e05535;
   --blue:#1d5fa8; --blue-bg:#e8f1fb; --accent:#2563eb;
   --orange:#b45309; --orange-bg:#fef3c7;
+  --garanti:#397b21; --garanti-bg:#eef7ec;
+  --ziraat:#9c0000; --ziraat-bg:#fbeaea;
   --radius:10px; --radius-lg:14px;
 }
 @media(prefers-color-scheme:dark){:root{
@@ -77,6 +79,8 @@ document.dispatchEvent(new Event('fbReady'));
   --red:#f07060; --red-bg:#2d1510; --red-mid:#e05535;
   --blue:#5b9fef; --blue-bg:#0d1e36; --accent:#4f8ef7;
   --orange:#fbbf24; --orange-bg:#2d1f00;
+  --garanti:#5fc47f; --garanti-bg:#132a1c;
+  --ziraat:#f0827a; --ziraat-bg:#301412;
 }}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;}
@@ -104,6 +108,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .start-bar input{width:160px;padding:7px 10px;border:1px solid var(--border-md);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:14px;font-family:'DM Mono',monospace;font-weight:500;}
 .start-bar input:focus{outline:none;border-color:var(--accent);}
 .currency{font-size:13px;color:var(--text-3);}
+
+/* Bank summary cards */
+.bank-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:1.25rem;}
+.bank-card{border-radius:var(--radius-lg);padding:14px 16px;border:1px solid var(--border);}
+.bank-card.garanti{background:var(--garanti-bg);}
+.bank-card.ziraat{background:var(--ziraat-bg);}
+.bank-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.bank-name{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;}
+.bank-card.garanti .bank-name{color:var(--garanti);}
+.bank-card.ziraat .bank-name{color:var(--ziraat);}
+.bank-edit-btn{background:none;border:none;cursor:pointer;color:var(--text-3);font-size:12px;padding:2px 5px;border-radius:6px;transition:all .1s;}
+.bank-edit-btn:hover{background:rgba(0,0,0,0.06);color:var(--text);}
+.bank-balance{font-size:22px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:-.5px;}
+.bank-start-edit{display:none;align-items:center;gap:6px;margin-top:8px;}
+.bank-start-edit.visible{display:flex;}
+.bank-start-edit label{font-size:11px;color:var(--text-2);white-space:nowrap;}
+.bank-start-edit input{flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border-md);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;font-family:'DM Mono',monospace;}
+.bank-start-save{background:none;border:1px solid var(--border-md);border-radius:8px;padding:5px 9px;font-size:11px;cursor:pointer;color:var(--text-2);}
+.bank-start-save:hover{color:var(--text);border-color:var(--text-3);}
+.hesap-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:5px;vertical-align:middle;}
+.hesap-badge.garanti{background:var(--garanti-bg);color:var(--garanti);}
+.hesap-badge.ziraat{background:var(--ziraat-bg);color:var(--ziraat);}
 
 /* Summary cards */
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:1.25rem;}
@@ -606,6 +632,33 @@ td.drag-handle:hover { color: var(--text-2); }
   <span class="currency">₺</span>
 </div>
 
+<div class="bank-summary" id="bankSummary">
+  <div class="bank-card garanti">
+    <div class="bank-card-head">
+      <span class="bank-name">🟢 Garanti Bankası</span>
+      <button class="bank-edit-btn" data-bank="garanti" title="Başlangıç bakiyesini düzenle">✎ Başlangıç</button>
+    </div>
+    <div class="bank-balance" id="bal_garanti">₺0</div>
+    <div class="bank-start-edit" id="editRow_garanti">
+      <label>Başlangıç:</label>
+      <input type="number" step="0.01" id="start_garanti">
+      <button class="bank-start-save" data-bank="garanti">Kaydet</button>
+    </div>
+  </div>
+  <div class="bank-card ziraat">
+    <div class="bank-card-head">
+      <span class="bank-name">🔴 T.C. Ziraat Bankası</span>
+      <button class="bank-edit-btn" data-bank="ziraat" title="Başlangıç bakiyesini düzenle">✎ Başlangıç</button>
+    </div>
+    <div class="bank-balance" id="bal_ziraat">₺0</div>
+    <div class="bank-start-edit" id="editRow_ziraat">
+      <label>Başlangıç:</label>
+      <input type="number" step="0.01" id="start_ziraat">
+      <button class="bank-start-save" data-bank="ziraat">Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <div class="summary">
   <div class="scard"><div class="scard-label">Toplam Gelen</div><div class="scard-val inc" id="totalIncome">₺0</div></div>
   <div class="scard"><div class="scard-label">Toplam Giden</div><div class="scard-val exp" id="totalExpense">₺0</div></div>
@@ -735,6 +788,14 @@ td.drag-handle:hover { color: var(--text-2); }
       </div>
     </div>
     <div class="fg">
+      <label>Hesap <span style="color:var(--text-3);font-weight:400">(isteğe bağlı)</span></label>
+      <select id="eHesap">
+        <option value="">— Seçilmedi —</option>
+        <option value="Garanti Bankası">🟢 Garanti Bankası</option>
+        <option value="T.C. Ziraat Bankası">🔴 T.C. Ziraat Bankası</option>
+      </select>
+    </div>
+    <div class="fg">
       <label>Not <span style="color:var(--text-3);font-weight:400">(isteğe bağlı)</span></label>
       <input type="text" id="eNote" placeholder="Fatura no, referans...">
     </div>
@@ -785,6 +846,14 @@ td.drag-handle:hover { color: var(--text-2); }
         <label>Kategori</label>
         <input type="text" id="cariCat" placeholder="Ör: Ödeme Sistemi">
       </div>
+    </div>
+    <div class="fg">
+      <label>Dedike Hesap <span style="color:var(--text-3);font-weight:400">(isteğe bağlı)</span></label>
+      <select id="cariHesap">
+        <option value="">— Her seferinde sor —</option>
+        <option value="Garanti Bankası">🟢 Garanti Bankası</option>
+        <option value="T.C. Ziraat Bankası">🔴 T.C. Ziraat Bankası</option>
+      </select>
     </div>
     <div class="fg">
       <label>Logo URL <span style="color:var(--text-3);font-weight:400">(isteğe bağlı — boş bırakırsan otomatik aranır)</span></label>
@@ -850,10 +919,11 @@ function loadData() {
       if (!d.budgets) d.budgets = {};
       if (!d.caris) d.caris = [];
       if (!d.manualVade) d.manualVade = [];
+      if (!d.bankStart) d.bankStart = {};
       return d;
     }
   } catch(e) {}
-  return { startBalances: {}, entries: {}, budgets: {}, caris: [] };
+  return { startBalances: {}, entries: {}, budgets: {}, caris: [], bankStart: {} };
 }
 
 function saveData() {
@@ -878,6 +948,7 @@ function initFirebaseSync() {
     if (!data.budgets) data.budgets = {};
     if (!data.caris) data.caris = [];
     if (!data.manualVade) data.manualVade = [];
+    if (!data.bankStart) data.bankStart = {};
     // Sync local backup
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
     const savedStart = data.startBalances[year];
@@ -908,6 +979,46 @@ function getStartBal() {
   const el = document.getElementById('startBalance');
   const v = parseFloat(el.value);
   return isNaN(v) ? (parseFloat(data.startBalances[year]) || 0) : v;
+}
+
+// --- Bank accounts (anlık kasa) ---
+const BANKS = [
+  { key: 'garanti', name: 'Garanti Bankası' },
+  { key: 'ziraat', name: 'T.C. Ziraat Bankası' }
+];
+function ensureBankStart() {
+  if (!data.bankStart) data.bankStart = {};
+  if (!data.bankStart[year]) data.bankStart[year] = {};
+  BANKS.forEach(b => { if (data.bankStart[year][b.key] === undefined) data.bankStart[year][b.key] = 0; });
+}
+function bankBalance(bankKey) {
+  ensureBankStart();
+  const bankName = BANKS.find(b => b.key === bankKey).name;
+  let bal = parseFloat(data.bankStart[year][bankKey]) || 0;
+  const now = new Date(); now.setHours(0,0,0,0);
+  for (let m = 0; m < 12; m++) {
+    getEntries(year, m).forEach(x => {
+      if (x.frozen) return;
+      if ((x.hesap || '') !== bankName) return;
+      const d = new Date(x.date); d.setHours(0,0,0,0);
+      if (d > now) return;
+      bal += x.type === 'income' ? x.amount : -x.amount;
+    });
+  }
+  return bal;
+}
+function renderBankSummary() {
+  ensureBankStart();
+  BANKS.forEach(b => {
+    const bal = bankBalance(b.key);
+    const balEl = document.getElementById('bal_' + b.key);
+    if (balEl) {
+      balEl.textContent = fmt(bal, true);
+      balEl.style.color = bal >= 0 ? 'var(--text)' : 'var(--red)';
+    }
+    const startInput = document.getElementById('start_' + b.key);
+    if (startInput && document.activeElement !== startInput) startInput.value = data.bankStart[year][b.key];
+  });
 }
 
 function monthStats(y, m) {
@@ -1305,6 +1416,7 @@ function render() {
     fSub.textContent = '';
   }
 
+  renderBankSummary();
   renderOverdue();
   renderUpcoming();
   renderManualVade();
@@ -1441,6 +1553,7 @@ function renderTable(m) {
     const bc = runBal >= 0 ? 'pos' : 'neg';
     const catHtml = x.cat ? `<span class="cat-tag">${x.cat}</span>` : '';
     const recHtml = x.recurring ? `<span class="recurring-badge">↻</span>` : '';
+    const hesapHtml = x.hesap ? `<span class="hesap-badge ${x.hesap==='Garanti Bankası'?'garanti':'ziraat'}">${x.hesap==='Garanti Bankası'?'🟢':'🔴'}</span>` : '';
     const frozenHtml = isFrozen ? `<span class="frozen-badge">❄ Donduruldu</span>` : '';
     const noteHtml = x.note ? `<div class="entry-note">📎 ${x.note}</div>` : '';
 
@@ -1473,7 +1586,7 @@ function renderTable(m) {
     return `<tr class="${dateRowClass}" draggable="true" data-id="${x.id}" data-date="${x.date}">
       <td class="drag-handle" title="Aynı tarihteki sırayı değiştir">⠿</td>
       <td class="date-cell" style="font-family:'DM Mono',monospace;font-size:12px;white-space:nowrap">${d[2]}.${d[1]}.${d[0]}${todayPill}</td>
-      <td><div style="display:flex;align-items:center">${cariLogoHtml}<span>${x.desc}${catHtml}${recHtml}${frozenHtml}</span></div>${noteHtml}</td>
+      <td><div style="display:flex;align-items:center">${cariLogoHtml}<span>${x.desc}${catHtml}${recHtml}${hesapHtml}${frozenHtml}</span></div>${noteHtml}</td>
       <td><span class="tag ${x.type}">${x.type==='income'?'Gelen':'Giden'}</span></td>
       <td class="amount-cell ${x.type==='income'?'inc':'exp'}">${x.type==='income'?'+':'-'}${fmt(x.amount,true)}</td>
       <td style="text-align:right">${isFrozen?'<span style="color:var(--text-3);font-size:11px;font-family:\'DM Mono\',monospace">—</span>':`<span class="kasa-badge ${bc}">${fmt(runBal,true)}</span>`}</td>
@@ -1643,6 +1756,7 @@ function openModal(entry, mode) {
     document.getElementById('eDesc').value = entry.desc;
     document.getElementById('eAmount').value = entry.amount;
     document.getElementById('eCat').value = entry.cat || '';
+    document.getElementById('eHesap').value = entry.hesap || '';
     document.getElementById('eNote').value = entry.note || '';
     document.getElementById('eRecurring').checked = false;
     document.getElementById('recurringRow').style.display = 'flex';
@@ -1658,6 +1772,7 @@ function openModal(entry, mode) {
     document.getElementById('eDesc').value = entry.desc;
     document.getElementById('eAmount').value = entry.amount;
     document.getElementById('eCat').value = entry.cat || '';
+    document.getElementById('eHesap').value = entry.hesap || '';
     document.getElementById('eNote').value = entry.note || '';
     document.getElementById('eRecurring').checked = false;
     document.getElementById('recurringRow').style.display = 'none';
@@ -1673,6 +1788,7 @@ function openModal(entry, mode) {
     document.getElementById('eDesc').value = '';
     document.getElementById('eAmount').value = '';
     document.getElementById('eCat').value = '';
+    document.getElementById('eHesap').value = '';
     document.getElementById('eNote').value = '';
     document.getElementById('eType').value = 'income';
     document.getElementById('eRecurring').checked = false;
@@ -1691,6 +1807,7 @@ function saveEntry() {
   const type = document.getElementById('eType').value;
   const desc = document.getElementById('eDesc').value.trim();
   const cat = document.getElementById('eCat').value.trim();
+  const hesap = document.getElementById('eHesap').value;
   const amount = parseFloat(document.getElementById('eAmount').value);
   const date = document.getElementById('eDate').value;
   const note = document.getElementById('eNote').value.trim();
@@ -1707,12 +1824,12 @@ function saveEntry() {
   if (editingId) {
     const key = getKey(y, m);
     const idx = (data.entries[key]||[]).findIndex(x=>x.id===editingId);
-    if (idx !== -1) data.entries[key][idx] = {...data.entries[key][idx], type, desc, cat, amount, date, note};
+    if (idx !== -1) data.entries[key][idx] = {...data.entries[key][idx], type, desc, cat, hesap, amount, date, note};
     saveData(); selectedMonth = m; closeModal(); showToast('Güncellendi'); render();
     return;
   }
 
-  const entry = {id: Date.now()+'-'+Math.random().toString(36).slice(2), type, desc, cat, amount, date, note, recurring};
+  const entry = {id: Date.now()+'-'+Math.random().toString(36).slice(2), type, desc, cat, hesap, amount, date, note, recurring};
   const key = getKey(y, m);
   if (!data.entries[key]) data.entries[key] = [];
   data.entries[key].push(entry);
@@ -1722,7 +1839,7 @@ function saveEntry() {
       const rDate = `${year}-${String(rm+1).padStart(2,'0')}-${date.split('-')[2]}`;
       const rKey = getKey(year, rm);
       if (!data.entries[rKey]) data.entries[rKey] = [];
-      data.entries[rKey].push({id: Date.now()+'-'+Math.random().toString(36).slice(2)+rm, type, desc, cat, amount, date: rDate, note, recurring: true});
+      data.entries[rKey].push({id: Date.now()+'-'+Math.random().toString(36).slice(2)+rm, type, desc, cat, hesap, amount, date: rDate, note, recurring: true});
     }
   }
 
@@ -1816,6 +1933,26 @@ document.getElementById('startBalance').addEventListener('input', function(){
 });
 
 document.getElementById('addEntryBtn').addEventListener('click', ()=>openModal(null));
+
+// Bank start-balance edit toggles
+document.querySelectorAll('.bank-edit-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const row = document.getElementById('editRow_' + btn.dataset.bank);
+    row.classList.toggle('visible');
+  });
+});
+document.querySelectorAll('.bank-start-save').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.bank;
+    const input = document.getElementById('start_' + key);
+    ensureBankStart();
+    data.bankStart[year][key] = parseFloat(input.value) || 0;
+    saveData();
+    document.getElementById('editRow_' + key).classList.remove('visible');
+    renderBankSummary();
+    showToast('Başlangıç bakiyesi güncellendi');
+  });
+});
 document.getElementById('exportBtn').addEventListener('click', ()=>{ if(selectedMonth!==null) exportCSV(selectedMonth); });
 document.getElementById('exportXlsxBtn').addEventListener('click', ()=>{ if(selectedMonth!==null) exportXLSX(selectedMonth); });
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
@@ -2070,7 +2207,7 @@ function renderCariPanel() {
       ${cariAvatarHtml(c, 36)}
       <div class="cari-info">
         <div class="cari-name">${c.name}</div>
-        <div class="cari-meta">${c.type==='income'?'📥 Gelen':'📤 Giden'}${c.cat?' · '+c.cat:''}${c.note?' · '+c.note:''}</div>
+        <div class="cari-meta">${c.type==='income'?'📥 Gelen':'📤 Giden'}${c.cat?' · '+c.cat:''}${c.note?' · '+c.note:''}${c.hesap?` · <span class="hesap-badge ${c.hesap==='Garanti Bankası'?'garanti':'ziraat'}">${c.hesap==='Garanti Bankası'?'🟢 Garanti':'🔴 Ziraat'}</span>`:''}</div>
       </div>
       <div class="cari-actions">
         <button class="edit-btn cari-edit-btn" data-id="${c.id}" title="Düzenle">✎</button>
@@ -2115,6 +2252,7 @@ function renderCariQuickPicks() {
       document.getElementById('eType').value = c.type;
       if (c.cat) document.getElementById('eCat').value = c.cat;
       if (c.note) document.getElementById('eNote').value = c.note;
+      document.getElementById('eHesap').value = c.hesap || '';
       document.getElementById('eAmount').focus();
     });
   });
@@ -2126,6 +2264,7 @@ function openCariModal(cari) {
   document.getElementById('cariName').value = cari ? cari.name : '';
   document.getElementById('cariType').value = cari ? cari.type : 'income';
   document.getElementById('cariCat').value = cari ? (cari.cat||'') : '';
+  document.getElementById('cariHesap').value = cari ? (cari.hesap||'') : '';
   document.getElementById('cariLogo').value = cari ? (cari.logo||'') : '';
   document.getElementById('cariNote').value = cari ? (cari.note||'') : '';
   document.getElementById('cariOverlay').classList.add('open');
@@ -2142,6 +2281,7 @@ function saveCari() {
   if (!name) { document.getElementById('cariName').focus(); return; }
   const cat = document.getElementById('cariCat').value.trim();
   const type = document.getElementById('cariType').value;
+  const hesap = document.getElementById('cariHesap').value;
   const logo = document.getElementById('cariLogo').value.trim();
   const note = document.getElementById('cariNote').value.trim();
 
@@ -2149,10 +2289,10 @@ function saveCari() {
   if (!data.manualVade) data.manualVade = [];
   if (editingCariId) {
     const idx = data.caris.findIndex(x => x.id === editingCariId);
-    if (idx !== -1) data.caris[idx] = {...data.caris[idx], name, type, cat, logo, note};
+    if (idx !== -1) data.caris[idx] = {...data.caris[idx], name, type, cat, hesap, logo, note};
     showToast('Cari güncellendi');
   } else {
-    data.caris.push({ id: Date.now()+'-'+Math.random().toString(36).slice(2), name, type, cat, logo, note });
+    data.caris.push({ id: Date.now()+'-'+Math.random().toString(36).slice(2), name, type, cat, hesap, logo, note });
     showToast('Cari kaydedildi');
   }
   saveData(); closeCariModal(); renderCariPanel();
@@ -2205,6 +2345,7 @@ document.getElementById('jsonFileInput').addEventListener('change', function() {
       if (!data.budgets) data.budgets = {};
       if (!data.caris) data.caris = [];
       if (!data.manualVade) data.manualVade = [];
+      if (!data.bankStart) data.bankStart = {};
       saveData();
       const s = data.startBalances[year];
       if (s !== undefined) document.getElementById('startBalance').value = s;
