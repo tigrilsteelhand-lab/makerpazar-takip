@@ -1855,10 +1855,10 @@ function exportCSV(m) {
   let runBal = getStartBal();
   for (let i = 0; i < m; i++) runBal += monthStats(year, i).net;
 
-  const rows = [['Tarih','Açıklama','Kategori','Tür','Tutar','Kasa','Not']];
+  const rows = [['Tarih','Açıklama','Kategori','Hesap','Tür','Tutar','Kasa','Not']];
   entries.forEach(x => {
     runBal += x.type==='income' ? x.amount : -x.amount;
-    rows.push([x.date, x.desc, x.cat||'', x.type==='income'?'Gelen':'Giden',
+    rows.push([x.date, x.desc, x.cat||'', x.hesap||'', x.type==='income'?'Gelen':'Giden',
       (x.type==='income'?'':'-')+x.amount.toFixed(2), runBal.toFixed(2), x.note||'']);
   });
 
@@ -1877,13 +1877,14 @@ function exportXLSX(m) {
   let runBal = getStartBal();
   for (let i = 0; i < m; i++) runBal += monthStats(year, i).net;
 
-  const rows = [['Tarih','Açıklama','Kategori','Tür','Tutar','Kasa','Not']];
+  const rows = [['Tarih','Açıklama','Kategori','Hesap','Tür','Tutar','Kasa','Not']];
   entries.forEach(x => {
     runBal += x.type==='income' ? x.amount : -x.amount;
     rows.push([
       x.date,
       x.desc,
       x.cat || '',
+      x.hesap || '',
       x.type === 'income' ? 'Gelen' : 'Giden',
       x.type === 'income' ? x.amount : -x.amount,
       parseFloat(runBal.toFixed(2)),
@@ -1895,7 +1896,7 @@ function exportXLSX(m) {
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
   // Column widths
-  ws['!cols'] = [{wch:13},{wch:30},{wch:16},{wch:8},{wch:14},{wch:14},{wch:24}];
+  ws['!cols'] = [{wch:13},{wch:30},{wch:16},{wch:20},{wch:8},{wch:14},{wch:14},{wch:24}];
 
   // Style header row bold (basic)
   const range = XLSX.utils.decode_range(ws['!ref']);
@@ -1906,7 +1907,7 @@ function exportXLSX(m) {
 
   // Format number columns (Tutar & Kasa) as currency
   for (let R = 1; R <= entries.length; R++) {
-    ['E','F'].forEach(col => {
+    ['F','G'].forEach(col => {
       const ref = col + (R+1);
       if (ws[ref]) ws[ref].z = '#,##0.00 ₺';
     });
@@ -2360,15 +2361,15 @@ let parsedImportRows = [];
 
 document.getElementById('downloadTemplateBtn').addEventListener('click', () => {
   const rows = [
-    ['Tarih','Açıklama','Tür','Tutar','Kategori','Not'],
-    ['2026-04-10','PayTR Tahsilatı','Gelen',15000,'Ödeme Sistemi','Mart komisyonu'],
-    ['2026-04-15','Sunucu Faturası','Giden',2500,'Altyapı',''],
-    ['2026-04-20','Müşteri A Ödemesi','Gelen',8000,'Müşteri','Nisan faturası'],
+    ['Tarih','Açıklama','Tür','Tutar','Kategori','Hesap','Not'],
+    ['2026-04-10','PayTR Tahsilatı','Gelen',15000,'Ödeme Sistemi','Garanti Bankası','Mart komisyonu'],
+    ['2026-04-15','Sunucu Faturası','Giden',2500,'Altyapı','T.C. Ziraat Bankası',''],
+    ['2026-04-20','Müşteri A Ödemesi','Gelen',8000,'Müşteri','','Nisan faturası'],
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(rows);
   // column widths
-  ws['!cols'] = [{wch:14},{wch:28},{wch:10},{wch:12},{wch:18},{wch:22}];
+  ws['!cols'] = [{wch:14},{wch:28},{wch:10},{wch:12},{wch:18},{wch:20},{wch:22}];
   XLSX.utils.book_append_sheet(wb, ws, 'Hareketler');
   XLSX.writeFile(wb, 'nakit-akisi-sablon.xlsx');
   showToast('Excel şablonu indirildi');
@@ -2401,8 +2402,16 @@ function parseCSVLine(line, delim) {
   result.push(cur.trim()); return result;
 }
 
+function normalizeHesap(raw) {
+  const h = (raw || '').trim().toLowerCase();
+  if (!h) return '';
+  if (h.includes('garanti')) return 'Garanti Bankası';
+  if (h.includes('ziraat')) return 'T.C. Ziraat Bankası';
+  return '';
+}
+
 function parseImportRow(cols, lineNum) {
-  const [rawDate, desc, rawType, rawAmount, cat, note] = cols;
+  const [rawDate, desc, rawType, rawAmount, cat, rawHesap, note] = cols;
   const errors = [];
   let date = '';
   if (rawDate) {
@@ -2422,8 +2431,9 @@ function parseImportRow(cols, lineNum) {
   if (isNaN(amount) || amount <= 0) errors.push('Tutar geçersiz');
   const descStr = (desc||'').trim();
   if (!descStr) errors.push('Açıklama boş');
+  const hesap = normalizeHesap(rawHesap);
   return { lineNum, date, desc: descStr, type, amount: isNaN(amount)?0:amount,
-    cat:(cat||'').trim(), note:(note||'').trim(), errors, ok: errors.length===0 };
+    cat:(cat||'').trim(), hesap, note:(note||'').trim(), errors, ok: errors.length===0 };
 }
 
 function parseCSVFile(file) {
@@ -2467,7 +2477,7 @@ function renderImportPreview(rows) {
     <span style="color:var(--green);font-weight:600">${ok} satır geçerli</span>
     ${err>0?`· <span style="color:var(--red);font-weight:600">${err} satır hatalı</span>`:''}
   </div><div style="max-height:280px;overflow-y:auto;">
-  <table><thead><tr><th>#</th><th>Tarih</th><th>Açıklama</th><th>Tür</th><th>Tutar</th><th>Kategori</th><th>Durum</th></tr></thead><tbody>`;
+  <table><thead><tr><th>#</th><th>Tarih</th><th>Açıklama</th><th>Tür</th><th>Tutar</th><th>Kategori</th><th>Hesap</th><th>Durum</th></tr></thead><tbody>`;
   rows.slice(0,100).forEach(r => {
     html += `<tr>
       <td style="color:var(--text-3)">${r.lineNum}</td>
@@ -2475,10 +2485,11 @@ function renderImportPreview(rows) {
       <td>${r.type==='income'?'Gelen':r.type==='expense'?'Giden':'—'}</td>
       <td style="font-family:'DM Mono',monospace;color:${r.type==='income'?'var(--green)':'var(--red)'}">${r.amount||'—'}</td>
       <td style="color:var(--text-3)">${r.cat||''}</td>
+      <td>${r.hesap?`<span class="hesap-badge ${r.hesap==='Garanti Bankası'?'garanti':'ziraat'}">${r.hesap==='Garanti Bankası'?'🟢 Garanti':'🔴 Ziraat'}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
       <td style="font-size:11px;color:${r.ok?'var(--green)':'var(--red)'}">${r.ok?'✓':'⚠ '+r.errors.join(', ')}</td>
     </tr>`;
   });
-  if (rows.length>100) html+=`<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:8px">...ve ${rows.length-100} satır daha</td></tr>`;
+  if (rows.length>100) html+=`<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:8px">...ve ${rows.length-100} satır daha</td></tr>`;
   html += '</tbody></table></div>';
   document.getElementById('importPreview').innerHTML = html;
   const btn = document.getElementById('importConfirmBtn');
@@ -2493,7 +2504,7 @@ document.getElementById('importConfirmBtn').addEventListener('click', () => {
     const d = new Date(r.date), m = d.getMonth(), y = d.getFullYear();
     const key = getKey(y,m);
     if (!data.entries[key]) data.entries[key] = [];
-    data.entries[key].push({ id: Date.now()+'-'+Math.random().toString(36).slice(2), type:r.type, desc:r.desc, cat:r.cat, amount:r.amount, date:r.date, note:r.note });
+    data.entries[key].push({ id: Date.now()+'-'+Math.random().toString(36).slice(2), type:r.type, desc:r.desc, cat:r.cat, hesap:r.hesap, amount:r.amount, date:r.date, note:r.note });
   });
   saveData();
   document.getElementById('importOverlay').classList.remove('open');
