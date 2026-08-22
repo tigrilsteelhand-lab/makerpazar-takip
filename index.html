@@ -1028,6 +1028,13 @@ function monthStats(y, m) {
   return { inc, exp, net: inc - exp, count: e.length };
 }
 
+function monthNetByHesap(y, m, bankName) {
+  const e = getEntries(y, m).filter(x => !x.frozen && (x.hesap || '') === bankName);
+  const inc = e.filter(x => x.type === 'income').reduce((a, x) => a + x.amount, 0);
+  const exp = e.filter(x => x.type === 'expense').reduce((a, x) => a + x.amount, 0);
+  return inc - exp;
+}
+
 function cumulativeBal(upToMonth) {
   let bal = getStartBal();
   for (let m = 0; m <= upToMonth; m++) bal += monthStats(year, m).net;
@@ -1546,11 +1553,26 @@ function renderTable(m) {
   let runBal = getStartBal();
   for (let i = 0; i < m; i++) runBal += monthStats(year, i).net;
 
+  ensureBankStart();
+  const runBalByHesap = {};
+  BANKS.forEach(b => {
+    let rb = parseFloat(data.bankStart[year][b.key]) || 0;
+    for (let i = 0; i < m; i++) rb += monthNetByHesap(year, i, b.name);
+    runBalByHesap[b.name] = rb;
+  });
+
   const rows = entries.map(x => {
     const d = x.date.split('-');
     const isFrozen = !!x.frozen;
-    if (!isFrozen) runBal += x.type === 'income' ? x.amount : -x.amount;
-    const bc = runBal >= 0 ? 'pos' : 'neg';
+    if (!isFrozen) {
+      runBal += x.type === 'income' ? x.amount : -x.amount;
+      if (x.hesap && runBalByHesap[x.hesap] !== undefined) {
+        runBalByHesap[x.hesap] += x.type === 'income' ? x.amount : -x.amount;
+      }
+    }
+    const showBal = (x.hesap && runBalByHesap[x.hesap] !== undefined) ? runBalByHesap[x.hesap] : runBal;
+    const bc = showBal >= 0 ? 'pos' : 'neg';
+    const kasaTagHtml = x.hesap ? `<span style="font-size:10px;color:var(--text-3);margin-left:5px;white-space:nowrap">${x.hesap==='Garanti Bankası'?'Garanti':'Ziraat'}</span>` : '';
     const catHtml = x.cat ? `<span class="cat-tag">${x.cat}</span>` : '';
     const recHtml = x.recurring ? `<span class="recurring-badge">↻</span>` : '';
     const hesapHtml = x.hesap ? `<span class="hesap-badge ${x.hesap==='Garanti Bankası'?'garanti':'ziraat'}">${x.hesap==='Garanti Bankası'?'🟢':'🔴'}</span>` : '';
@@ -1589,7 +1611,7 @@ function renderTable(m) {
       <td><div style="display:flex;align-items:center">${cariLogoHtml}<span>${x.desc}${catHtml}${recHtml}${hesapHtml}${frozenHtml}</span></div>${noteHtml}</td>
       <td><span class="tag ${x.type}">${x.type==='income'?'Gelen':'Giden'}</span></td>
       <td class="amount-cell ${x.type==='income'?'inc':'exp'}">${x.type==='income'?'+':'-'}${fmt(x.amount,true)}</td>
-      <td style="text-align:right">${isFrozen?'<span style="color:var(--text-3);font-size:11px;font-family:\'DM Mono\',monospace">—</span>':`<span class="kasa-badge ${bc}">${fmt(runBal,true)}</span>`}</td>
+      <td style="text-align:right">${isFrozen?'<span style="color:var(--text-3);font-size:11px;font-family:\'DM Mono\',monospace">—</span>':`<span class="kasa-badge ${bc}">${fmt(showBal,true)}</span>${kasaTagHtml}`}</td>
       <td style="text-align:center">${payHtml}</td>
       <td style="white-space:nowrap">
         <button class="copy-btn" data-id="${x.id}" title="Kopyala (yeni hareket olarak ekler)">⧉</button>
